@@ -1,8 +1,9 @@
 import SwiftUI
 import SwiftData
+import OSLog
 
 private struct ScrollOffsetKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
+    static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
@@ -14,6 +15,7 @@ struct VideoDetailView: View {
     @State private var activeMoveID: UUID?
     @State private var sortedMoves: [Move] = []
     @Environment(\.modelContext) private var modelContext
+    private let logger = Logger(subsystem: "CumbiaMoves", category: "VideoDetail")
 
     init(video: Video) {
         self.video = video
@@ -136,19 +138,32 @@ struct VideoDetailView: View {
     }
 
     private func activateMove(_ move: Move) {
+        guard let range = playableRange(for: move) else {
+            logger.error(
+                "Ignoring invalid move range. video=\(video.displayName, privacy: .public), start=\(move.time, privacy: .public), end=\(String(describing: move.endTime), privacy: .public), duration=\(video.duration, privacy: .public)"
+            )
+            return
+        }
+
         activeMoveID = move.id
-        controller.setActiveRange(start: move.time, end: move.endTime)
-        controller.seek(to: move.time)
-        controller.play()
+        controller.pause()
+        controller.playRange(start: range.start, end: range.end)
         Haptics.light()
     }
 
     private func advanceActiveMove(currentTime t: TimeInterval) {
-        let dur = video.duration
-        guard let m = sortedMoves.first(where: { $0.time <= t && t < ($0.endTime ?? dur) }) else { return }
+        guard t.isFinite else { return }
+        let dur = effectiveDuration
+        guard let m = sortedMoves.first(where: { move in
+            guard move.time.isFinite else { return false }
+            let start = max(0, min(move.time, dur))
+            let end = normalizedEnd(move.endTime, start: start, duration: dur)
+            return start <= t && t < end
+        }) else { return }
         if m.id != activeMoveID {
             activeMoveID = m.id
-            controller.setActiveRange(start: m.time, end: m.endTime)
+            guard let range = playableRange(for: m) else { return }
+            controller.setActiveRange(start: range.start, end: range.end)
         }
     }
 
@@ -189,5 +204,32 @@ struct VideoDetailView: View {
 
     private func refreshSortedMoves(excluding removedID: UUID? = nil) {
         sortedMoves = video.movesSorted.filter { $0.id != removedID }
+    }
+
+    private var effectiveDuration: TimeInterval {
+        if controller.duration.isFinite, controller.duration > 0 {
+            return controller.duration
+        }
+        return max(0, video.duration)
+    }
+
+    private func playableRange(for move: Move) -> (start: TimeInterval, end: TimeInterval?)? {
+        let duration = effectiveDuration
+        guard duration > 0, move.time.isFinite else { return nil }
+
+        let start = max(0, min(move.time, duration))
+        let end = normalizedEnd(move.endTime, start: start, duration: duration)
+        guard end > start else { return nil }
+
+        return (start, move.endTime == nil ? nil : end)
+    }
+
+    private func normalizedEnd(
+        _ endTime: TimeInterval?,
+        start: TimeInterval,
+        duration: TimeInterval
+    ) -> TimeInterval {
+        guard let endTime, endTime.isFinite else { return duration }
+        return max(start, min(endTime, duration))
     }
 }

@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Photos
 import PhotosUI
 
 struct LibraryView: View {
@@ -43,7 +44,12 @@ struct LibraryView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    PhotosPicker(selection: $pickerItem, matching: .videos) {
+                    PhotosPicker(
+                        selection: $pickerItem,
+                        matching: nil,
+                        preferredItemEncoding: .current,
+                        photoLibrary: .shared()
+                    ) {
                         if isImporting {
                             ProgressView().controlSize(.small)
                         } else {
@@ -89,7 +95,10 @@ struct LibraryView: View {
         defer { isImporting = false }
 
         do {
-            let result = try await VideoImporter.import(from: item, existingVideos: videos)
+            let existingSourceIDs = Dictionary(uniqueKeysWithValues: videos.compactMap { v in
+                v.sourceAssetID.map { ($0, v.id) }
+            })
+            let result = try await VideoImporter.import(from: item, existingSourceIDs: existingSourceIDs)
             let video = Video(
                 displayName: result.displayName,
                 localFilename: result.filename,
@@ -113,9 +122,9 @@ struct LibraryView: View {
                     duration: duration
                 )
             }
-        } catch ImportError.alreadyImported(let existing) {
+        } catch ImportError.alreadyImported(let existingID) {
             // Navigate to the existing video instead of showing error
-            _ = existing  // SwiftUI navigation could be triggered here
+            _ = existingID  // SwiftUI navigation could be triggered here
         } catch {
             importError = error.localizedDescription
             showError = true

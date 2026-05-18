@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct TrimTrackView: View {
     let controller: PlaybackController
@@ -8,11 +9,22 @@ struct TrimTrackView: View {
     let allowsMarkerEditing: Bool
 
     @State private var trackWidth: CGFloat = 1
-    @State private var dragging: DragTarget?
+
+    @State private var dragTarget: DragTarget?
+    @State private var hasMoved = false
+    @State private var pressLocationX: CGFloat = 0
+
+    // Armed marker state (set on long-press success)
+    @State private var armedMarkerIdx: Int?
+    @State private var armedOriginalTime: TimeInterval = 0
+    @State private var armedStartPlayhead: TimeInterval = 0
+    @State private var prevDragTime: TimeInterval = 0
+    @State private var wasAtClamp = false
+    @State private var selectionGen: UISelectionFeedbackGenerator?
 
     private enum DragTarget {
         case playhead
-        case splitMarker(Int)
+        case marker(Int)
     }
 
     private var dur: TimeInterval { max(1, controller.duration) }
@@ -26,12 +38,12 @@ struct TrimTrackView: View {
     }
 
     private func isMarkerActive(_ idx: Int) -> Bool {
-        if case .splitMarker(let i) = dragging { return i == idx }
+        if case .marker(let i) = dragTarget { return i == idx }
         return false
     }
 
     private var isDraggingPlayhead: Bool {
-        if case .playhead = dragging { return true }
+        if case .playhead = dragTarget { return true }
         return false
     }
 
@@ -66,15 +78,14 @@ struct TrimTrackView: View {
             ForEach(Array(moves.dropLast().enumerated()), id: \.offset) { idx, move in
                 let mx = xFor(move.endTime ?? dur)
                 let active = isMarkerActive(idx)
-                ZStack {
-                    // wider invisible hit area
-                    Color.clear.frame(width: 20, height: trackH + 8)
-                    Capsule()
-                        .fill(Color.accentColor)
-                        .frame(width: active ? 3 : 2, height: trackH + 8)
-                }
-                .offset(x: mx - 10, y: -4)
-                .allowsHitTesting(false)
+                Capsule()
+                    .fill(Color.accentColor)
+                    .frame(width: active ? 6 : 2, height: trackH + 8)
+                    .shadow(color: active ? Color.accentColor.opacity(0.6) : .clear,
+                            radius: active ? 6 : 0)
+                    .offset(x: mx - (active ? 3 : 1), y: -4)
+                    .animation(.spring(response: 0.28, dampingFraction: 0.7), value: active)
+                    .allowsHitTesting(false)
             }
 
             // Playhead
@@ -95,59 +106,130 @@ struct TrimTrackView: View {
             }
         )
         .contentShape(Rectangle())
-        .gesture(trackGesture)
-        .onTapGesture { location in
-            controller.seek(to: timeFor(location.x))
+        .gesture(combinedGesture)
+    }
+
+    // MARK: - Gesture
+
+    private var combinedGesture: some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .local)
+            .onChanged(handleDragChanged)
+            .onEnded(handleDragEnded)
+            .simultaneously(with:
+                LongPressGesture(minimumDuration: 0.5, maximumDistance: 10)
+                    .onEnded { _ in handleLongPress() }
+            )
+    }
+
+    private func handleDragChanged(_ value: DragGesture.Value) {
+        if pressLocationX == 0, !hasMoved {
+            pressLocationX = value.startLocation.x
+        }
+
+        let moved = abs(value.translation.width) > 4 || abs(value.translation.height) > 4
+        if moved { hasMoved = true }
+
+        if dragTarget == nil, moved, armedMarkerIdx == nil {
+            // User moved before long-press could arm — scrub.
+            dragTarget = .playhead
+            controller.pause()
+        }
+
+        switch dragTarget {
+        case .playhead:
+            controller.seek(to: max(0, min(timeFor(value.location.x), dur)))
+        case .marker(let idx):
+            handleMarkerDrag(toX: value.location.x, idx: idx)
+        case nil:
+            break
         }
     }
 
-    private var trackGesture: some Gesture {
-        DragGesture(minimumDistance: 4, coordinateSpace: .local)
-            .onChanged { value in
-                if dragging == nil {
-                    let sx = value.startLocation.x
-                    var closestMarker: Int? = nil
-                    var closestDist: CGFloat = 22
-                    if allowsMarkerEditing {
-                        for (idx, move) in moves.dropLast().enumerated() {
-                            let mx = xFor(move.endTime ?? dur)
-                            let d = abs(sx - mx)
-                            if d < closestDist {
-                                closestDist = d
-                                closestMarker = idx
-                            }
-                        }
-                    }
-                    if let markerIdx = closestMarker {
-                        dragging = .splitMarker(markerIdx)
-                    } else {
-                        dragging = .playhead
-                        controller.seek(to: timeFor(sx))
-                    }
-                    controller.pause()
-                }
+    private func handleDragEnded(_ value: DragGesture.Value) {
+        if !hasMoved, dragTarget == nil {
+            // Tap-to-seek.
+            controller.seek(to: timeFor(value.startLocation.x))
+        }
 
-                let t = timeFor(value.location.x)
-                switch dragging! {
-                case .playhead:
-                    controller.seek(to: max(0, min(t, dur)))
-                case .splitMarker(let idx):
-                    guard idx < moves.count - 1 else { break }
-                    let prev = moves[idx]
-                    let next = moves[idx + 1]
-                    let minT = prev.time + 0.5
-                    let maxT = (next.endTime ?? dur) - 0.5
-                    guard minT < maxT else { break }
-                    let clamped = max(minT, min(t, maxT))
-                    prev.endTime = clamped
-                    next.time = clamped
-                    controller.seek(to: clamped)
-                }
+        if case .marker = dragTarget {
+            Haptics.light()
+        }
+
+        dragTarget = nil
+        armedMarkerIdx = nil
+        hasMoved = false
+        pressLocationX = 0
+        wasAtClamp = false
+        selectionGen = nil
+    }
+
+    private func handleLongPress() {
+        guard allowsMarkerEditing else { return }
+        guard !hasMoved else { return }
+        guard dragTarget == nil else { return }
+
+        let pressX = pressLocationX
+        var pick: (idx: Int, dist: CGFloat)?
+        for (idx, move) in moves.dropLast().enumerated() {
+            let mx = xFor(move.endTime ?? dur)
+            let d = abs(pressX - mx)
+            if pick == nil || d < pick!.dist {
+                pick = (idx, d)
             }
-            .onEnded { _ in
-                guard dragging != nil else { return }
-                dragging = nil
-                Haptics.light()
-            }
+        }
+
+        guard let chosen = pick, chosen.dist < 22 else { return }
+        guard chosen.idx < moves.count - 1 else { return }
+
+        let originalTime = moves[chosen.idx].endTime ?? dur
+        armedMarkerIdx = chosen.idx
+        armedOriginalTime = originalTime
+        armedStartPlayhead = controller.currentTime
+        prevDragTime = originalTime
+        wasAtClamp = false
+
+        let gen = UISelectionFeedbackGenerator()
+        gen.prepare()
+        selectionGen = gen
+
+        controller.pause()
+        Haptics.medium()
+        dragTarget = .marker(chosen.idx)
+    }
+
+    private func handleMarkerDrag(toX x: CGFloat, idx: Int) {
+        guard idx < moves.count - 1 else { return }
+        let prev = moves[idx]
+        let next = moves[idx + 1]
+        let minT = prev.time + 0.5
+        let maxT = (next.endTime ?? dur) - 0.5
+        guard minT < maxT else { return }
+
+        let desired = timeFor(x)
+        let clamped = max(minT, min(desired, maxT))
+
+        let nowAtClamp = (desired < minT || desired > maxT)
+        if nowAtClamp, !wasAtClamp {
+            Haptics.rigid()
+        }
+        wasAtClamp = nowAtClamp
+
+        if crossed(prev: prevDragTime, curr: clamped, threshold: armedOriginalTime) {
+            selectionGen?.selectionChanged()
+            selectionGen?.prepare()
+        } else if crossed(prev: prevDragTime, curr: clamped, threshold: armedStartPlayhead) {
+            selectionGen?.selectionChanged()
+            selectionGen?.prepare()
+        }
+
+        prevDragTime = clamped
+
+        prev.endTime = clamped
+        next.time = clamped
+        controller.seek(to: clamped)
+    }
+
+    private func crossed(prev: TimeInterval, curr: TimeInterval, threshold: TimeInterval) -> Bool {
+        (prev < threshold && curr >= threshold) || (prev > threshold && curr <= threshold)
     }
 }

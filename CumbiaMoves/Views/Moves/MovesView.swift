@@ -27,6 +27,7 @@ struct MovesView: View {
 
     @State private var controller = PlaybackController()
     @State private var activeMoveID: UUID?
+    @State private var pendingAutoplayMoveID: UUID?
     @State private var activeVideoMoves: [Move] = []
     @State private var filter: MovesFilter = .named
     @State private var moves: [Move] = []
@@ -127,6 +128,7 @@ struct MovesView: View {
                 }
                 .listStyle(.plain)
                 .listSectionSpacing(.compact)
+                .contentMargins(.top, 0, for: .scrollContent)
                 .environment(controller)
                 .safeAreaInset(edge: .top, spacing: 0) {
                     topSection
@@ -143,6 +145,9 @@ struct MovesView: View {
                 }
                 .task(id: moves.count) {
                     await backfillRecordedDates()
+                }
+                .task(id: pendingAutoplayMoveID) {
+                    await playPendingMoveIfNeeded()
                 }
             }
             .navigationTitle("Moves")
@@ -186,8 +191,7 @@ struct MovesView: View {
         }
         .textCase(nil)
         .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 6)
+        .padding(.vertical, 6)
         .background(Color(.systemGroupedBackground))
     }
 
@@ -295,6 +299,7 @@ struct MovesView: View {
         VStack(spacing: 0) {
             if let move = activeMove, let video = move.video {
                 playerSection(video: video)
+                    .id(video.id)
             } else {
                 playerPlaceholder
             }
@@ -307,22 +312,23 @@ struct MovesView: View {
     private func playerSection(video: Video) -> some View {
         VStack(spacing: 0) {
             VideoPlayer(player: controller.player)
+                .id(video.id)
                 .aspectRatio(16 / 9, contentMode: .fit)
                 .frame(maxWidth: .infinity)
                 .background(Color.black)
 
-            PlayerControlsBar(controller: controller)
+            PlayerControlsBar(controller: controller, onSplit: split)
 
             TrimTrackView(
                 controller: controller,
                 videoID: video.id,
                 videoURL: video.fileURL,
                 moves: activeVideoMoves,
-                allowsMarkerEditing: false
+                allowsMarkerEditing: true
             )
             .frame(height: 44)
             .padding(.horizontal, 16)
-            .padding(.bottom, 8)
+            .padding(.bottom, 12)
         }
     }
 
@@ -371,15 +377,57 @@ struct MovesView: View {
 
     // MARK: - Actions
 
+    private func split() {
+        guard let video = activeMove?.video else { return }
+        let t = controller.currentTime
+        let videoDur = controller.duration
+        guard videoDur > 0, t > 0.1, t < videoDur - 0.1 else { return }
+
+        let sorted = video.movesSorted
+
+        if sorted.isEmpty {
+            let m1 = Move(name: "", time: 0, endTime: t, video: video)
+            let m2 = Move(name: "", time: t, endTime: videoDur, video: video)
+            modelContext.insert(m1)
+            modelContext.insert(m2)
+        } else {
+            guard let segment = sorted.first(where: {
+                $0.time <= t && t < ($0.endTime ?? videoDur)
+            }) else { return }
+            guard t > segment.time + 0.1 && t < (segment.endTime ?? videoDur) - 0.1 else { return }
+
+            let after = Move(name: "", time: t, endTime: segment.endTime ?? videoDur, video: video)
+            modelContext.insert(after)
+            segment.endTime = t
+        }
+
+        Haptics.medium()
+        activeVideoMoves = video.movesSorted
+    }
+
     private func activate(_ move: Move) {
         guard let video = move.video else { return }
-        controller.loadVideo(url: video.fileURL)
+        let videoURL = video.fileURL
+
+        if controller.currentVideoURL != videoURL {
+            controller.pause()
+            controller = PlaybackController(videoURL: videoURL)
+        }
+
         activeMoveID = move.id
         activeVideoMoves = video.movesSorted
-        controller.setActiveRange(start: move.time, end: move.endTime)
-        controller.seek(to: move.time)
-        controller.play()
+        pendingAutoplayMoveID = move.id
         Haptics.light()
+    }
+
+    @MainActor
+    private func playPendingMoveIfNeeded() async {
+        guard let pendingID = pendingAutoplayMoveID,
+              let move = moves.first(where: { $0.id == pendingID }) else { return }
+
+        pendingAutoplayMoveID = nil
+        await Task.yield()
+        controller.playRange(start: move.time, end: move.endTime)
     }
 
     private func cycleStatus(_ move: Move) {

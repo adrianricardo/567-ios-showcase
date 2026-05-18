@@ -25,7 +25,8 @@ struct PlayerAndTrimSection: View {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
                         isCollapsed = false
                     }
-                }
+                },
+                onSplit: onSplit
             )
 
             TrimTrackView(
@@ -38,22 +39,8 @@ struct PlayerAndTrimSection: View {
             .frame(height: isCollapsed ? 32 : 44)
             .padding(.horizontal, 16)
             .padding(.top, isCollapsed ? 4 : 8)
+            .padding(.bottom, 8)
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: isCollapsed)
-
-            // Split button
-            Button {
-                onSplit()
-            } label: {
-                Label("Split", systemImage: "scissors")
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 36)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.regular)
-            .disabled(controller.duration == 0)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
         }
         .background(.background)
         .overlay(alignment: .bottom) { Divider() }
@@ -91,10 +78,11 @@ struct PlayerHeaderView: View {
     let controller: PlaybackController
     @Binding var isCollapsed: Bool
     let onExpand: () -> Void
+    let onSplit: () -> Void
 
     var body: some View {
         ZStack(alignment: .top) {
-            PlayerFullView(video: video, controller: controller, isCollapsed: $isCollapsed)
+            PlayerFullView(video: video, controller: controller, isCollapsed: $isCollapsed, onSplit: onSplit)
                 .opacity(isCollapsed ? 0 : 1)
                 .allowsHitTesting(!isCollapsed)
 
@@ -114,6 +102,7 @@ struct PlayerFullView: View {
     let video: Video
     let controller: PlaybackController
     @Binding var isCollapsed: Bool
+    let onSplit: () -> Void
     @Environment(\.modelContext) private var modelContext
 
     var body: some View {
@@ -143,7 +132,7 @@ struct PlayerFullView: View {
                 .frame(maxWidth: .infinity)
                 .background(Color.black)
 
-            PlayerControlsBar(controller: controller)
+            PlayerControlsBar(controller: controller, onSplit: onSplit)
         }
     }
 }
@@ -152,23 +141,34 @@ struct PlayerFullView: View {
 
 struct PlayerControlsBar: View {
     let controller: PlaybackController
+    let onSplit: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
-            Button {
-                controller.toggle()
-                Haptics.light()
-            } label: {
-                Image(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.title3)
-                    .frame(width: 44, height: 44)
-            }
+            // Left: play/pause + timestamp
+            leftGroup
 
-            Spacer()
-            Text(formatTime(controller.currentTime))
-                .font(.subheadline.monospacedDigit())
-                .foregroundStyle(.secondary)
-            Spacer()
+            Spacer(minLength: 8)
+
+            // Center: split
+            Button {
+                onSplit()
+            } label: {
+                Label("Split", systemImage: "scissors")
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 12)
+                    .frame(height: 36)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.regular)
+            .disabled(controller.duration == 0)
+
+            Spacer(minLength: 8)
+
+            // Right: invisible mirror of left group + loop toggle.
+            // The mirror makes the gap left of the toggle equal to play+timestamp width.
+            leftGroup
+                .hidden()
 
             Button {
                 controller.isLooping.toggle()
@@ -182,7 +182,27 @@ struct PlayerControlsBar: View {
             .accessibilityLabel(controller.isLooping ? "Loop on" : "Loop off")
         }
         .padding(.horizontal, 8)
-        .frame(height: 44)
+        .padding(.vertical, 6)
+        .frame(height: 60)
+    }
+
+    private var leftGroup: some View {
+        HStack(spacing: 4) {
+            Button {
+                controller.toggle()
+                Haptics.light()
+            } label: {
+                Image(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.title3)
+                    .frame(width: 44, height: 44)
+            }
+
+            Text(formatTime(controller.currentTime))
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize()
+        }
     }
 }
 
