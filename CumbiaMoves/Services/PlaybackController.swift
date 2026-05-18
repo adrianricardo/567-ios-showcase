@@ -52,7 +52,10 @@ import Observation
         if let obs = loopObserver { player.removeTimeObserver(obs) }
     }
 
-    func play()   { player.play() }
+    func play() {
+        prepareAudioSession()
+        player.play()
+    }
     func pause()  { player.pause() }
 
     func toggle() {
@@ -102,5 +105,11 @@ import Observation
                 }
             }
             .store(in: &cancellables)
+    }
+
+    private func prepareAudioSession() {
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playback, mode: .moviePlayback)
+        try? session.setActive(true)
     }
 }

@@ -1,15 +1,11 @@
 import SwiftUI
 import SwiftData
-import AVFoundation
 
 @main
 struct CumbiaMovesApp: App {
     let container: ModelContainer
 
     init() {
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
-        try? AVAudioSession.sharedInstance().setActive(true)
-
         let schema = Schema([Video.self, Move.self])
         let config = ModelConfiguration()
 

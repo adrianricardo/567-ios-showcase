@@ -15,76 +15,66 @@ enum MovesFilter: String, CaseIterable, Identifiable {
     }
 }
 
+private struct MoveGroup: Identifiable {
+    let id: String
+    let title: String
+    let moves: [Move]
+    let sortDate: Date
+}
+
 struct MovesView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Move.updatedAt, order: .reverse) private var allMoves: [Move]
 
     @State private var controller = PlaybackController()
     @State private var activeMoveID: UUID?
+    @State private var activeVideoMoves: [Move] = []
     @State private var filter: MovesFilter = .named
+    @State private var moves: [Move] = []
+    @State private var isLoading = false
+    @State private var canLoadMore = false
+    @State private var loadError: String?
     @State private var backfilledVideoIDs: Set<UUID> = []
 
-    private var unnamedCount: Int {
-        allMoves.filter { !$0.isExcluded && $0.name.isEmpty }.count
-    }
-
-    private var excludedCount: Int {
-        allMoves.filter { $0.isExcluded }.count
-    }
-
-    private var filteredMoves: [Move] {
-        switch filter {
-        case .named:
-            return allMoves.filter { $0.isNamed }
-        case .unnamed:
-            return allMoves.filter { !$0.isExcluded && $0.name.isEmpty }
-        case .excluded:
-            return allMoves.filter { $0.isExcluded }
-        case .all:
-            return allMoves
-        }
-    }
-
-    private var groupedMoves: [(video: Video, moves: [Move])] {
-        var groups: [UUID: (video: Video, moves: [Move])] = [:]
-
-        for move in filteredMoves {
-            guard let video = move.video else { continue }
-            if groups[video.id] == nil {
-                groups[video.id] = (video, [])
-            }
-            groups[video.id]?.moves.append(move)
-        }
-
-        return groups.values
-            .sorted { $0.video.importedAt > $1.video.importedAt }
-            .map { group in
-                (group.video, group.moves.sorted { $0.time < $1.time })
-            }
-    }
-
-    private var videosNeedingRecordedDateBackfill: [Video] {
-        var videosByID: [UUID: Video] = [:]
-        for move in allMoves {
-            guard let video = move.video,
-                  video.recordedAt == nil,
-                  !backfilledVideoIDs.contains(video.id)
-            else { continue }
-            videosByID[video.id] = video
-        }
-        return Array(videosByID.values)
-    }
+    private let pageSize = 80
 
     private var activeMove: Move? {
         guard let id = activeMoveID else { return nil }
-        return allMoves.first { $0.id == id }
+        return moves.first { $0.id == id }
+    }
+
+    private var moveGroups: [MoveGroup] {
+        var groups: [MoveGroup] = []
+        var indexesByID: [String: Int] = [:]
+
+        for move in moves {
+            let video = move.video
+            let groupID = video?.id.uuidString ?? "missing-video"
+            let sortDate = video?.recordedAt ?? video?.importedAt ?? .distantPast
+            let title = video.map { groupTitle(for: $0) } ?? "Unknown Date"
+
+            if let index = indexesByID[groupID] {
+                var groupMoves = groups[index].moves
+                groupMoves.append(move)
+                groups[index] = MoveGroup(
+                    id: groupID,
+                    title: groups[index].title,
+                    moves: groupMoves.sorted { $0.time < $1.time },
+                    sortDate: groups[index].sortDate
+                )
+            } else {
+                indexesByID[groupID] = groups.count
+                groups.append(MoveGroup(id: groupID, title: title, moves: [move], sortDate: sortDate))
+            }
+        }
+
+        return groups.sorted { $0.sortDate > $1.sortDate }
     }
 
     var body: some View {
         NavigationStack {
             ScrollViewReader { proxy in
                 List {
-                    ForEach(groupedMoves, id: \.video.id) { group in
+                    ForEach(moveGroups) { group in
                         Section {
                             ForEach(group.moves) { move in
                                 MoveRowView(
@@ -101,14 +91,38 @@ struct MovesView: View {
                                 .listRowInsets(EdgeInsets())
                             }
                         } header: {
-                            sectionHeader(for: group.video)
+                            moveGroupHeader(title: group.title, count: group.moves.count)
                         }
                     }
 
-                    if filteredMoves.isEmpty {
+                    if isLoading && moves.isEmpty {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 24)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets())
+                    } else if moves.isEmpty {
                         emptyState
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets())
+                    }
+
+                    if canLoadMore {
+                        Button {
+                            Task { await loadMoreMoves() }
+                        } label: {
+                            if isLoading {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity)
+                            } else {
+                                Text("Load More")
+                                    .font(.subheadline.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .disabled(isLoading)
+                        .padding(.vertical, 12)
+                        .listRowSeparator(.hidden)
                     }
                 }
                 .listStyle(.plain)
@@ -124,13 +138,11 @@ struct MovesView: View {
                         }
                     }
                 }
-                .task(id: allMoves.count) {
-                    try? await Task.sleep(for: .milliseconds(700))
-                    guard !Task.isCancelled else { return }
-                    await backfillRecordedDates()
+                .task(id: filter) {
+                    await reloadMoves()
                 }
-                .onChange(of: controller.currentTime) { _, t in
-                    advanceActiveMove(currentTime: t)
+                .task(id: moves.count) {
+                    await backfillRecordedDates()
                 }
             }
             .navigationTitle("Moves")
@@ -147,10 +159,8 @@ struct MovesView: View {
         Menu {
             Picker("Filter", selection: $filter) {
                 Text("Named").tag(MovesFilter.named)
-                Text(unnamedCount > 0 ? "Unnamed (\(unnamedCount))" : "Unnamed")
-                    .tag(MovesFilter.unnamed)
-                Text(excludedCount > 0 ? "Excluded (\(excludedCount))" : "Excluded")
-                    .tag(MovesFilter.excluded)
+                Text("Unnamed").tag(MovesFilter.unnamed)
+                Text("Excluded").tag(MovesFilter.excluded)
                 Text("All").tag(MovesFilter.all)
             }
         } label: {
@@ -161,40 +171,124 @@ struct MovesView: View {
         .accessibilityLabel("Filter: \(filter.label)")
     }
 
-    private func advanceActiveMove(currentTime t: TimeInterval) {
-        guard let video = activeMove?.video else { return }
-        let sorted = video.movesSorted
-        let dur = video.duration
-        guard let m = sorted.first(where: { $0.time <= t && t < ($0.endTime ?? dur) }) else { return }
-        if m.id != activeMoveID {
-            activeMoveID = m.id
-            controller.setActiveRange(start: m.time, end: m.endTime)
+    private func moveGroupHeader(title: String, count: Int) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            Text("\(count)")
+                .font(.caption2.monospacedDigit().weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .textCase(nil)
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 6)
+        .background(Color(.systemGroupedBackground))
+    }
+
+    private func groupTitle(for video: Video) -> String {
+        (video.recordedAt ?? video.importedAt).formatted(date: .long, time: .omitted)
+    }
+
+    // MARK: - Fetching
+
+    @MainActor
+    private func reloadMoves() async {
+        activeMoveID = nil
+        activeVideoMoves = []
+        controller.pause()
+        moves = []
+        canLoadMore = false
+        await fetchMoves(offset: 0, replacing: true)
+    }
+
+    @MainActor
+    private func loadMoreMoves() async {
+        await fetchMoves(offset: moves.count, replacing: false)
+    }
+
+    @MainActor
+    private func fetchMoves(offset: Int, replacing: Bool) async {
+        guard !isLoading else { return }
+        isLoading = true
+        loadError = nil
+        defer { isLoading = false }
+
+        var descriptor = FetchDescriptor<Move>(
+            predicate: predicate(for: filter),
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = pageSize + 1
+        descriptor.fetchOffset = offset
+
+        do {
+            var fetched = try modelContext.fetch(descriptor)
+            canLoadMore = fetched.count > pageSize
+            if canLoadMore {
+                fetched.removeLast()
+            }
+            if replacing {
+                moves = fetched
+            } else {
+                moves.append(contentsOf: fetched)
+            }
+        } catch {
+            loadError = error.localizedDescription
+            canLoadMore = false
         }
     }
 
-    @ViewBuilder
-    private func sectionHeader(for video: Video) -> some View {
-        Text((video.recordedAt ?? video.importedAt).friendlyLabel)
-            .font(.footnote.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .textCase(nil)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.systemBackground))
-            .listRowInsets(EdgeInsets())
-    }
-
+    @MainActor
     private func backfillRecordedDates() async {
-        for video in videosNeedingRecordedDateBackfill {
+        let videos = videosNeedingRecordedDateBackfill()
+
+        for video in videos {
             backfilledVideoIDs.insert(video.id)
             if let date = await VideoMetadata.recordedDate(at: video.fileURL) {
-                await MainActor.run { video.recordedAt = date }
+                video.recordedAt = date
             }
         }
     }
 
-    // MARK: - Top section (filter + player + trim)
+    private func videosNeedingRecordedDateBackfill() -> [Video] {
+        var videosByID: [UUID: Video] = [:]
+
+        for move in moves {
+            guard let video = move.video,
+                  video.recordedAt == nil,
+                  !backfilledVideoIDs.contains(video.id)
+            else { continue }
+            videosByID[video.id] = video
+        }
+
+        return Array(videosByID.values)
+    }
+
+    private func predicate(for filter: MovesFilter) -> Predicate<Move>? {
+        switch filter {
+        case .named:
+            return #Predicate<Move> { move in
+                !move.name.isEmpty && !move.isExcluded
+            }
+        case .unnamed:
+            return #Predicate<Move> { move in
+                move.name.isEmpty && !move.isExcluded
+            }
+        case .excluded:
+            return #Predicate<Move> { move in
+                move.isExcluded
+            }
+        case .all:
+            return nil
+        }
+    }
+
+    // MARK: - Top section
 
     @ViewBuilder
     private var topSection: some View {
@@ -223,9 +317,10 @@ struct MovesView: View {
                 controller: controller,
                 videoID: video.id,
                 videoURL: video.fileURL,
-                moves: video.movesSorted
+                moves: activeVideoMoves,
+                allowsMarkerEditing: false
             )
-            .frame(height: 36)
+            .frame(height: 44)
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
         }
@@ -280,6 +375,7 @@ struct MovesView: View {
         guard let video = move.video else { return }
         controller.loadVideo(url: video.fileURL)
         activeMoveID = move.id
+        activeVideoMoves = video.movesSorted
         controller.setActiveRange(start: move.time, end: move.endTime)
         controller.seek(to: move.time)
         controller.play()
@@ -295,12 +391,14 @@ struct MovesView: View {
     private func rename(_ move: Move, to name: String) {
         move.name = name
         move.updatedAt = Date()
+        refreshCurrentPage()
         Haptics.success()
     }
 
     private func toggleExclude(_ move: Move) {
         move.isExcluded.toggle()
         move.updatedAt = Date()
+        refreshCurrentPage()
         Haptics.light()
     }
 
@@ -325,6 +423,11 @@ struct MovesView: View {
 
         if activeMoveID == move.id { activeMoveID = nil }
         modelContext.delete(move)
+        moves.removeAll { $0.id == move.id }
         Haptics.medium()
+    }
+
+    private func refreshCurrentPage() {
+        Task { await reloadMoves() }
     }
 }

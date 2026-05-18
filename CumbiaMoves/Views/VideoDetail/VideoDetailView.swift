@@ -12,16 +12,18 @@ struct VideoDetailView: View {
     @State private var isCollapsed = false
     @State private var initialSentinelY: CGFloat?
     @State private var activeMoveID: UUID?
+    @State private var sortedMoves: [Move] = []
     @Environment(\.modelContext) private var modelContext
 
     init(video: Video) {
         self.video = video
         self._controller = State(wrappedValue: PlaybackController(videoURL: video.fileURL))
+        self._sortedMoves = State(wrappedValue: video.movesSorted)
     }
 
     private var activeMove: Move? {
         guard let id = activeMoveID else { return nil }
-        return video.movesSorted.first { $0.id == id }
+        return sortedMoves.first { $0.id == id }
     }
 
     var body: some View {
@@ -40,7 +42,7 @@ struct VideoDetailView: View {
                         }
                     )
 
-                ForEach(video.movesSorted) { move in
+                ForEach(sortedMoves) { move in
                     MoveRowView(
                         move: move,
                         isActive: activeMoveID == move.id,
@@ -55,7 +57,7 @@ struct VideoDetailView: View {
                     .listRowInsets(EdgeInsets())
                 }
 
-                if video.movesSorted.isEmpty {
+                if sortedMoves.isEmpty {
                     ContentUnavailableView(
                         "No Segments Yet",
                         systemImage: "scissors",
@@ -78,6 +80,7 @@ struct VideoDetailView: View {
                 PlayerAndTrimSection(
                     video: video,
                     controller: controller,
+                    moves: sortedMoves,
                     isCollapsed: $isCollapsed,
                     onSplit: split
                 )
@@ -91,6 +94,12 @@ struct VideoDetailView: View {
             }
             .onChange(of: controller.currentTime) { _, t in
                 advanceActiveMove(currentTime: t)
+            }
+            .onChange(of: video.moves.count) {
+                refreshSortedMoves()
+            }
+            .onAppear {
+                refreshSortedMoves()
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .tabBar)
@@ -123,6 +132,7 @@ struct VideoDetailView: View {
         }
 
         Haptics.medium()
+        refreshSortedMoves()
     }
 
     private func activateMove(_ move: Move) {
@@ -134,9 +144,8 @@ struct VideoDetailView: View {
     }
 
     private func advanceActiveMove(currentTime t: TimeInterval) {
-        let sorted = video.movesSorted
         let dur = video.duration
-        guard let m = sorted.first(where: { $0.time <= t && t < ($0.endTime ?? dur) }) else { return }
+        guard let m = sortedMoves.first(where: { $0.time <= t && t < ($0.endTime ?? dur) }) else { return }
         if m.id != activeMoveID {
             activeMoveID = m.id
             controller.setActiveRange(start: m.time, end: m.endTime)
@@ -150,19 +159,19 @@ struct VideoDetailView: View {
     }
 
     private func deleteMove(_ move: Move) {
-        let sorted = video.movesSorted
         let dur = controller.duration
 
-        if sorted.count > 1, let idx = sorted.firstIndex(where: { $0.id == move.id }) {
+        if sortedMoves.count > 1, let idx = sortedMoves.firstIndex(where: { $0.id == move.id }) {
             if idx > 0 {
-                sorted[idx - 1].endTime = move.endTime ?? dur
+                sortedMoves[idx - 1].endTime = move.endTime ?? dur
             } else {
-                sorted[idx + 1].time = 0
+                sortedMoves[idx + 1].time = 0
             }
         }
 
         if activeMoveID == move.id { activeMoveID = nil }
         modelContext.delete(move)
+        refreshSortedMoves(excluding: move.id)
         Haptics.medium()
     }
 
@@ -176,5 +185,9 @@ struct VideoDetailView: View {
         move.isExcluded.toggle()
         move.updatedAt = Date()
         Haptics.light()
+    }
+
+    private func refreshSortedMoves(excluding removedID: UUID? = nil) {
+        sortedMoves = video.movesSorted.filter { $0.id != removedID }
     }
 }

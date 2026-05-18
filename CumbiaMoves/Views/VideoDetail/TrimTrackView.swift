@@ -5,6 +5,7 @@ struct TrimTrackView: View {
     let videoID: UUID
     let videoURL: URL
     let moves: [Move]
+    let allowsMarkerEditing: Bool
 
     @State private var trackWidth: CGFloat = 1
     @State private var dragging: DragTarget?
@@ -35,7 +36,7 @@ struct TrimTrackView: View {
     }
 
     var body: some View {
-        let trackH = 36.0
+        let trackH = 44.0
 
         ZStack(alignment: .topLeading) {
             ThumbnailStripView(
@@ -45,6 +46,10 @@ struct TrimTrackView: View {
                 height: trackH
             )
             .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay {
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+            }
 
             // Excluded segment dim overlays
             ForEach(moves.filter(\.isExcluded)) { move in
@@ -103,12 +108,14 @@ struct TrimTrackView: View {
                     let sx = value.startLocation.x
                     var closestMarker: Int? = nil
                     var closestDist: CGFloat = 22
-                    for (idx, move) in moves.dropLast().enumerated() {
-                        let mx = xFor(move.endTime ?? dur)
-                        let d = abs(sx - mx)
-                        if d < closestDist {
-                            closestDist = d
-                            closestMarker = idx
+                    if allowsMarkerEditing {
+                        for (idx, move) in moves.dropLast().enumerated() {
+                            let mx = xFor(move.endTime ?? dur)
+                            let d = abs(sx - mx)
+                            if d < closestDist {
+                                closestDist = d
+                                closestMarker = idx
+                            }
                         }
                     }
                     if let markerIdx = closestMarker {

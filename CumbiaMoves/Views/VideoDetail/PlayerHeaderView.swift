@@ -6,6 +6,7 @@ import AVKit
 struct PlayerAndTrimSection: View {
     let video: Video
     let controller: PlaybackController
+    let moves: [Move]
     @Binding var isCollapsed: Bool
     let onSplit: () -> Void
 
@@ -31,10 +32,12 @@ struct PlayerAndTrimSection: View {
                 controller: controller,
                 videoID: video.id,
                 videoURL: video.fileURL,
-                moves: video.movesSorted
+                moves: moves,
+                allowsMarkerEditing: true
             )
-            .frame(height: isCollapsed ? 28 : 36)
+            .frame(height: isCollapsed ? 32 : 44)
             .padding(.horizontal, 16)
+            .padding(.top, isCollapsed ? 4 : 8)
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: isCollapsed)
 
             // Split button
@@ -69,8 +72,8 @@ struct PlayerAndTrimSection: View {
             titleVisibility: .visible
         ) {
             Button("Delete Video & All Moves", role: .destructive) {
-                let vid = video
-                Task { await ThumbnailService.shared.clearCache(for: vid.id) }
+                let videoID = video.id
+                Task { await ThumbnailService.shared.clearCache(for: videoID) }
                 try? FileManager.default.removeItem(at: video.fileURL)
                 modelContext.delete(video)
                 dismiss()
