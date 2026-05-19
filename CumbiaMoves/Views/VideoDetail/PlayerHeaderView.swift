@@ -34,10 +34,10 @@ struct PlayerAndTrimSection: View {
                 videoID: video.id,
                 videoURL: video.fileURL,
                 moves: moves,
-                allowsMarkerEditing: true
+                allowsMarkerEditing: true,
+                fillsVisibleRange: true
             )
-            .frame(height: isCollapsed ? 32 : 44)
-            .padding(.horizontal, 16)
+            .frame(height: 52)
             .padding(.top, isCollapsed ? 4 : 8)
             .padding(.bottom, 8)
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: isCollapsed)
@@ -127,7 +127,7 @@ struct PlayerFullView: View {
             .padding(.top, 8)
             .padding(.bottom, 4)
 
-            VideoPlayer(player: controller.player)
+            VideoPlayerSurface(controller: controller)
                 .aspectRatio(16 / 9, contentMode: .fit)
                 .frame(maxWidth: .infinity)
                 .background(Color.black)
@@ -144,13 +144,15 @@ struct PlayerControlsBar: View {
     let onSplit: () -> Void
 
     var body: some View {
-        HStack(spacing: 0) {
-            // Left: play/pause + timestamp
-            leftGroup
+        HStack(spacing: 12) {
+            Text(formatTime(controller.currentTime))
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize()
 
             Spacer(minLength: 8)
 
-            // Center: split
             Button {
                 onSplit()
             } label: {
@@ -165,11 +167,6 @@ struct PlayerControlsBar: View {
 
             Spacer(minLength: 8)
 
-            // Right: invisible mirror of left group + loop toggle.
-            // The mirror makes the gap left of the toggle equal to play+timestamp width.
-            leftGroup
-                .hidden()
-
             Button {
                 controller.isLooping.toggle()
                 Haptics.light()
@@ -181,28 +178,9 @@ struct PlayerControlsBar: View {
             }
             .accessibilityLabel(controller.isLooping ? "Loop on" : "Loop off")
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .frame(height: 60)
-    }
-
-    private var leftGroup: some View {
-        HStack(spacing: 4) {
-            Button {
-                controller.toggle()
-                Haptics.light()
-            } label: {
-                Image(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.title3)
-                    .frame(width: 44, height: 44)
-            }
-
-            Text(formatTime(controller.currentTime))
-                .font(.subheadline.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .fixedSize()
-        }
+        .frame(height: 56)
     }
 }
 

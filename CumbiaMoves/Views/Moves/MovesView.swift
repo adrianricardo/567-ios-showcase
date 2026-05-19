@@ -305,27 +305,19 @@ struct MovesView: View {
                     .padding(.trailing, 18)
             }
 
-            HStack(spacing: 8) {
-                Button {
-                    controller.toggle()
-                    Haptics.light()
-                } label: {
-                    Image(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.title3)
-                        .frame(width: 36, height: 36)
+            TrimTrackView(
+                controller: controller,
+                videoID: video.id,
+                videoURL: video.fileURL,
+                moves: activeVideoMoves,
+                allowsMarkerEditing: true,
+                fillsVisibleRange: true,
+                onTapSegment: { move, time in
+                    selectSegment(move, at: time)
                 }
-                .disabled(controller.duration == 0)
-
-                TrimTrackView(
-                    controller: controller,
-                    videoID: video.id,
-                    videoURL: video.fileURL,
-                    moves: activeVideoMoves,
-                    allowsMarkerEditing: true
-                )
-                .frame(height: 44)
-            }
-            .padding(.horizontal, 12)
+            )
+            .frame(height: 52)
+            .padding(.horizontal, 16)
         }
     }
 
@@ -462,6 +454,15 @@ struct MovesView: View {
         activeVideoMoves = video.movesSorted
         pendingAutoplayMoveID = move.id
         Haptics.light()
+    }
+
+    private func selectSegment(_ move: Move, at time: TimeInterval) {
+        if activeMoveID != move.id {
+            activeMoveID = move.id
+            controller.setActiveRange(start: move.time, end: move.endTime)
+            Haptics.light()
+        }
+        controller.seek(to: time)
     }
 
     @MainActor

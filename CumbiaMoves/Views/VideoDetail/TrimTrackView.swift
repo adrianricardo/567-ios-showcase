@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 struct TrimTrackView: View {
     let controller: PlaybackController
@@ -7,132 +6,192 @@ struct TrimTrackView: View {
     let videoURL: URL
     let moves: [Move]
     let allowsMarkerEditing: Bool
+    var fillsVisibleRange = false
+    var onTapSegment: ((Move, TimeInterval) -> Void)? = nil
 
     @State private var trackWidth: CGFloat = 1
-
     @State private var dragTarget: DragTarget?
     @State private var hasMoved = false
     @State private var pressLocationX: CGFloat = 0
-
-    @State private var armedMarkerIdx: Int?
-    @State private var armedOriginalTime: TimeInterval = 0
-    @State private var armedStartPlayhead: TimeInterval = 0
-    @State private var prevDragTime: TimeInterval = 0
     @State private var wasAtClamp = false
-    @State private var selectionGen: UISelectionFeedbackGenerator?
 
     private enum DragTarget {
-        case playhead
-        case marker(Int)
+        case scrub
+        case handle(Int)
     }
 
-    private var dur: TimeInterval { max(1, controller.duration) }
+    private let trackHeight: CGFloat = 52
+    private let segmentGap: CGFloat = 18
+    private let handleVisualWidth: CGFloat = 8
+    private let handleHitRadius: CGFloat = 9
+    private let cornerRadius: CGFloat = 8
 
-    private func xFor(_ t: TimeInterval) -> CGFloat {
-        CGFloat(t / dur) * trackWidth
+    private var dur: TimeInterval {
+        let d = controller.duration
+        return (d.isFinite && d > 0) ? d : 1
     }
 
-    private func timeFor(_ x: CGFloat) -> TimeInterval {
-        TimeInterval(max(0, min(1, x / trackWidth))) * dur
+    private var timelineMoves: [Move] {
+        moves.sorted { $0.time < $1.time }
     }
 
-    private func isMarkerActive(_ idx: Int) -> Bool {
-        if case .marker(let i) = dragTarget { return i == idx }
-        return false
+    private var timelineStart: TimeInterval {
+        guard fillsVisibleRange, let first = timelineMoves.first else { return 0 }
+        return max(0, min(first.time, dur))
     }
 
-    private var isDraggingPlayhead: Bool {
-        if case .playhead = dragTarget { return true }
-        return false
+    private var timelineEnd: TimeInterval {
+        guard fillsVisibleRange, let last = timelineMoves.last else { return dur }
+        return max(timelineStart, min(last.endTime ?? dur, dur))
     }
+
+    private var timelineDuration: TimeInterval {
+        max(0.001, timelineEnd - timelineStart)
+    }
+
+    private var trackFill: Color { Color(.systemGray5) }
+    private var excludedFill: Color { Color(.systemGray4) }
+    private var playedFill: Color { Color(red: 0.42, green: 0.72, blue: 1.0) }
+    private var handleFill: Color { Color(.systemGray3) }
+    private var handleScrim: Color { Color.black.opacity(0.08) }
+
+    private var railStroke: Color { Color.black.opacity(0) }
 
     var body: some View {
-        let trackH = 44.0
-
         ZStack(alignment: .topLeading) {
-            ThumbnailStripView(
-                videoURL: videoURL,
-                videoID: videoID,
-                duration: controller.duration,
-                height: trackH
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .overlay {
-                RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(railStroke, lineWidth: 1)
+                .frame(height: trackHeight)
+
+            ForEach(timelineMoves) { move in
+                segmentView(for: move)
             }
 
-            ForEach(moves.filter(\.isExcluded)) { move in
-                let x = xFor(move.time)
-                let w = xFor(move.endTime ?? dur) - x
-                Rectangle()
-                    .fill(Color.black.opacity(0.4))
-                    .frame(width: max(0, w), height: trackH)
-                    .offset(x: x)
-                    .allowsHitTesting(false)
+            if allowsMarkerEditing {
+                ForEach(Array(timelineMoves.dropLast().enumerated()), id: \.offset) { idx, move in
+                    handleView(at: xFor(move.endTime ?? dur), active: isHandleActive(idx))
+                }
             }
-
-            ForEach(Array(moves.dropLast().enumerated()), id: \.offset) { idx, move in
-                let mx = xFor(move.endTime ?? dur)
-                let active = isMarkerActive(idx)
-                Capsule()
-                    .fill(Color.accentColor)
-                    .frame(width: active ? 6 : 2, height: trackH + 8)
-                    .shadow(color: active ? Color.accentColor.opacity(0.6) : .clear,
-                            radius: active ? 6 : 0)
-                    .offset(x: mx - (active ? 3 : 1), y: -4)
-                    .animation(.spring(response: 0.28, dampingFraction: 0.7), value: active)
-                    .allowsHitTesting(false)
-            }
-
-            Capsule()
-                .fill(Color.white)
-                .shadow(radius: isDraggingPlayhead ? 4 : 2)
-                .frame(width: isDraggingPlayhead ? 3 : 2, height: trackH + 6)
-                .offset(x: xFor(controller.currentTime) - 1, y: -3)
-                .animation(.interactiveSpring(response: 0.15), value: isDraggingPlayhead)
-                .allowsHitTesting(false)
         }
-        .frame(maxWidth: .infinity, minHeight: trackH, maxHeight: trackH)
+        .frame(maxWidth: .infinity, minHeight: trackHeight, maxHeight: trackHeight)
         .background(
             GeometryReader { geo in
                 Color.clear
-                    .onAppear  { trackWidth = geo.size.width }
+                    .onAppear { trackWidth = geo.size.width }
                     .onChange(of: geo.size.width) { _, w in trackWidth = w }
             }
         )
         .contentShape(Rectangle())
-        .gesture(combinedGesture)
+        .gesture(dragGesture)
     }
 
-    private var combinedGesture: some Gesture {
+    @ViewBuilder
+    private func segmentView(for move: Move) -> some View {
+        let rawStart = xFor(move.time)
+        let rawEnd = xFor(move.endTime ?? dur)
+        let isFirst = timelineMoves.first?.id == move.id
+        let isLast = timelineMoves.last?.id == move.id
+        let segStart = rawStart + (isFirst ? 0 : segmentGap / 2)
+        let segEnd = rawEnd - (isLast ? 0 : segmentGap / 2)
+        let segWidth = max(0, segEnd - segStart)
+        let progressWidth = (isTrimming || !isCurrent(move)) ? 0 : segWidth * progress(in: move)
+        let segmentFill = move.isExcluded ? excludedFill : trackFill
+
+        if segWidth > 0 {
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(segmentFill)
+
+                if progressWidth > 0 {
+                    Rectangle()
+                        .fill(playedFill)
+                        .frame(width: progressWidth)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .frame(width: segWidth, height: trackHeight)
+            .offset(x: segStart)
+        }
+    }
+
+    @ViewBuilder
+    private func handleView(at x: CGFloat, active: Bool) -> some View {
+        let w = active ? handleVisualWidth + 2 : handleVisualWidth
+        let h = active ? 34.0 : 28.0
+        let y = (trackHeight - h) / 2
+
+        Capsule()
+            .fill(handleFill)
+            .frame(width: w, height: h)
+            .offset(x: x - w / 2, y: y)
+            .shadow(color: active ? Color.black.opacity(0.18) : handleScrim, radius: active ? 5 : 1, y: 1)
+            .animation(.spring(response: 0.25, dampingFraction: 0.75), value: active)
+            .allowsHitTesting(false)
+    }
+
+    private func xFor(_ t: TimeInterval) -> CGFloat {
+        guard t.isFinite, trackWidth.isFinite, trackWidth > 0 else { return 0 }
+        let clamped = max(timelineStart, min(t, timelineEnd))
+        return CGFloat((clamped - timelineStart) / timelineDuration) * trackWidth
+    }
+
+    private func timeFor(_ x: CGFloat) -> TimeInterval {
+        guard x.isFinite, trackWidth > 0 else { return timelineStart }
+        let progress = TimeInterval(max(0, min(1, x / trackWidth)))
+        return timelineStart + progress * timelineDuration
+    }
+
+    private func isCurrent(_ move: Move) -> Bool {
+        let end = move.endTime ?? dur
+        return move.time <= controller.currentTime && controller.currentTime < end
+    }
+
+    private func progress(in move: Move) -> CGFloat {
+        let end = move.endTime ?? dur
+        guard end > move.time else { return 0 }
+        let clamped = max(move.time, min(controller.currentTime, end))
+        return CGFloat((clamped - move.time) / (end - move.time))
+    }
+
+    private func isHandleActive(_ idx: Int) -> Bool {
+        if case .handle(let i) = dragTarget { return i == idx }
+        return false
+    }
+
+    private var isTrimming: Bool {
+        if case .handle = dragTarget { return true }
+        return false
+    }
+
+    private var dragGesture: some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .local)
             .onChanged(handleDragChanged)
             .onEnded(handleDragEnded)
-            .simultaneously(with:
-                LongPressGesture(minimumDuration: 0.5, maximumDistance: 10)
-                    .onEnded { _ in handleLongPress() }
-            )
     }
 
     private func handleDragChanged(_ value: DragGesture.Value) {
         if pressLocationX == 0, !hasMoved {
             pressLocationX = value.startLocation.x
         }
-
         let moved = abs(value.translation.width) > 4 || abs(value.translation.height) > 4
         if moved { hasMoved = true }
 
-        if dragTarget == nil, moved, armedMarkerIdx == nil {
-            dragTarget = .playhead
-            controller.pause()
+        if dragTarget == nil {
+            if allowsMarkerEditing, let idx = handleIndex(near: pressLocationX) {
+                dragTarget = .handle(idx)
+                controller.pause()
+                Haptics.medium()
+            } else if moved {
+                dragTarget = .scrub
+                controller.pause()
+            }
         }
 
         switch dragTarget {
-        case .playhead:
+        case .scrub:
             controller.seek(to: max(0, min(timeFor(value.location.x), dur)))
-        case .marker(let idx):
-            handleMarkerDrag(toX: value.location.x, idx: idx)
+        case .handle(let idx):
+            performHandleDrag(toX: value.location.x, idx: idx)
         case nil:
             break
         }
@@ -140,88 +199,58 @@ struct TrimTrackView: View {
 
     private func handleDragEnded(_ value: DragGesture.Value) {
         if !hasMoved, dragTarget == nil {
-            controller.seek(to: timeFor(value.startLocation.x))
+            let t = timeFor(value.startLocation.x)
+            if let move = moveAt(time: t), let onTap = onTapSegment {
+                onTap(move, t)
+            } else {
+                controller.seek(to: t)
+            }
         }
 
-        if case .marker = dragTarget {
+        if case .handle = dragTarget {
             Haptics.light()
         }
 
         dragTarget = nil
-        armedMarkerIdx = nil
         hasMoved = false
         pressLocationX = 0
         wasAtClamp = false
-        selectionGen = nil
     }
 
-    private func handleLongPress() {
-        guard allowsMarkerEditing else { return }
-        guard !hasMoved else { return }
-        guard dragTarget == nil else { return }
-
-        let pressX = pressLocationX
-        var pick: (idx: Int, dist: CGFloat)?
-        for (idx, move) in moves.dropLast().enumerated() {
-            let mx = xFor(move.endTime ?? dur)
-            let d = abs(pressX - mx)
-            if pick == nil || d < pick!.dist {
-                pick = (idx, d)
+    private func handleIndex(near x: CGFloat) -> Int? {
+        var best: (idx: Int, dist: CGFloat)?
+        for (idx, move) in timelineMoves.dropLast().enumerated() {
+            let hx = xFor(move.endTime ?? dur)
+            let d = abs(x - hx)
+            if best == nil || d < best!.dist {
+                best = (idx, d)
             }
         }
-
-        guard let chosen = pick, chosen.dist < 22 else { return }
-        guard chosen.idx < moves.count - 1 else { return }
-
-        let originalTime = moves[chosen.idx].endTime ?? dur
-        armedMarkerIdx = chosen.idx
-        armedOriginalTime = originalTime
-        armedStartPlayhead = controller.currentTime
-        prevDragTime = originalTime
-        wasAtClamp = false
-
-        let gen = UISelectionFeedbackGenerator()
-        gen.prepare()
-        selectionGen = gen
-
-        controller.pause()
-        Haptics.medium()
-        dragTarget = .marker(chosen.idx)
+        if let best, best.dist < handleHitRadius { return best.idx }
+        return nil
     }
 
-    private func handleMarkerDrag(toX x: CGFloat, idx: Int) {
-        guard idx < moves.count - 1 else { return }
-        let prev = moves[idx]
-        let next = moves[idx + 1]
+    private func moveAt(time: TimeInterval) -> Move? {
+        timelineMoves.first { $0.time <= time && time < ($0.endTime ?? dur) } ?? timelineMoves.last
+    }
+
+    private func performHandleDrag(toX x: CGFloat, idx: Int) {
+        let sortedMoves = timelineMoves
+        guard idx < sortedMoves.count - 1 else { return }
+        let prev = sortedMoves[idx]
+        let next = sortedMoves[idx + 1]
         let minT = prev.time + 0.5
         let maxT = (next.endTime ?? dur) - 0.5
         guard minT < maxT else { return }
 
         let desired = timeFor(x)
         let clamped = max(minT, min(desired, maxT))
-
         let nowAtClamp = (desired < minT || desired > maxT)
-        if nowAtClamp, !wasAtClamp {
-            Haptics.rigid()
-        }
+        if nowAtClamp, !wasAtClamp { Haptics.rigid() }
         wasAtClamp = nowAtClamp
-
-        if crossed(prev: prevDragTime, curr: clamped, threshold: armedOriginalTime) {
-            selectionGen?.selectionChanged()
-            selectionGen?.prepare()
-        } else if crossed(prev: prevDragTime, curr: clamped, threshold: armedStartPlayhead) {
-            selectionGen?.selectionChanged()
-            selectionGen?.prepare()
-        }
-
-        prevDragTime = clamped
 
         prev.endTime = clamped
         next.time = clamped
         controller.seek(to: clamped)
-    }
-
-    private func crossed(prev: TimeInterval, curr: TimeInterval, threshold: TimeInterval) -> Bool {
-        (prev < threshold && curr >= threshold) || (prev > threshold && curr <= threshold)
     }
 }
