@@ -7,34 +7,68 @@ enum ImportError: LocalizedError {
     case transferFailed
     case durationUnavailable
     case alreadyImported(UUID)
+    case fileAccessDenied
 
     var errorDescription: String? {
         switch self {
         case .transferFailed:       return "Could not read the selected video."
         case .durationUnavailable:  return "Could not determine video duration."
         case .alreadyImported:      return "This video is already in your library."
+        case .fileAccessDenied:     return "Could not access the selected file."
         }
     }
+}
+
+struct VideoImportResult {
+    let filename: String
+    let displayName: String
+    let duration: TimeInterval
+    let sourceID: String?
+    let recordedAt: Date?
 }
 
 struct VideoImporter {
     static func `import`(
         from item: PhotosPickerItem,
         existingSourceIDs: [String: UUID]
-    ) async throws -> (filename: String, displayName: String, duration: TimeInterval, sourceID: String?, recordedAt: Date?) {
+    ) async throws -> VideoImportResult {
         guard let loaded = try? await item.loadTransferable(type: MovieTransferable.self) else {
             throw ImportError.transferFailed
         }
 
         let sourceID = item.itemIdentifier
 
-        // Dedup check
         if let sourceID, let existingID = existingSourceIDs[sourceID] {
             throw ImportError.alreadyImported(existingID)
         }
 
-        // Read duration
-        let asset = AVURLAsset(url: loaded.url)
+        // Photos imports come through a temp file named with a UUID, so we don't
+        // have a meaningful original name — let ingest synthesize one from the date.
+        return try await ingest(
+            sourceURL: loaded.url,
+            originalName: nil,
+            sourceID: sourceID
+        )
+    }
+
+    /// Import from a file URL (e.g. Files picker). Caller is responsible for any
+    /// security-scoped resource access around the URL.
+    static func `import`(fromFileURL url: URL) async throws -> VideoImportResult {
+        return try await ingest(
+            sourceURL: url,
+            originalName: url.deletingPathExtension().lastPathComponent,
+            sourceID: nil
+        )
+    }
+
+    // MARK: - Shared ingestion
+
+    private static func ingest(
+        sourceURL: URL,
+        originalName: String?,
+        sourceID: String?
+    ) async throws -> VideoImportResult {
+        let asset = AVURLAsset(url: sourceURL)
         let duration: TimeInterval
         if let dur = try? await asset.load(.duration), dur.seconds.isFinite {
             duration = dur.seconds
@@ -42,22 +76,62 @@ struct VideoImporter {
             throw ImportError.durationUnavailable
         }
 
-        let recordedAt = await VideoMetadata.recordedDate(at: loaded.url)
+        let recordedAt = await VideoMetadata.recordedDate(at: sourceURL)
 
-        // Copy to app sandbox
         let videosDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("videos")
         try FileManager.default.createDirectory(at: videosDir, withIntermediateDirectories: true)
 
-        let fileExtension = loaded.url.pathExtension.isEmpty ? "mov" : loaded.url.pathExtension
-        let filename = UUID().uuidString + "." + fileExtension
+        let fileExtension = sourceURL.pathExtension.isEmpty ? "mov" : sourceURL.pathExtension
+        let filename = uniqueDateBasedFilename(
+            date: recordedAt ?? Date(),
+            ext: fileExtension,
+            in: videosDir
+        )
         let dest = videosDir.appendingPathComponent(filename)
-        try FileManager.default.copyItem(at: loaded.url, to: dest)
+        try FileManager.default.copyItem(at: sourceURL, to: dest)
 
-        let displayName = loaded.url.deletingPathExtension().lastPathComponent
-            .replacingOccurrences(of: "_", with: " ")
+        let displayName = displayName(
+            from: originalName,
+            recordedAt: recordedAt
+        )
 
-        return (filename, displayName, duration, sourceID, recordedAt)
+        return VideoImportResult(
+            filename: filename,
+            displayName: displayName,
+            duration: duration,
+            sourceID: sourceID,
+            recordedAt: recordedAt
+        )
+    }
+
+    private static func displayName(from originalName: String?, recordedAt: Date?) -> String {
+        if let originalName, !looksLikeUUID(originalName) {
+            return originalName.replacingOccurrences(of: "_", with: " ")
+        }
+        let date = recordedAt ?? Date()
+        return date.formatted(date: .abbreviated, time: .shortened)
+    }
+
+    private static func looksLikeUUID(_ s: String) -> Bool {
+        UUID(uuidString: s) != nil
+    }
+
+    private static func uniqueDateBasedFilename(date: Date, ext: String, in directory: URL) -> String {
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "en_US_POSIX")
+        df.timeZone = .current
+        df.dateFormat = "yyyy-MM-dd-HHmmss"
+        let base = df.string(from: date)
+
+        var candidate = "\(base).\(ext)"
+        var counter = 2
+        let fm = FileManager.default
+        while fm.fileExists(atPath: directory.appendingPathComponent(candidate).path) {
+            candidate = "\(base)-\(counter).\(ext)"
+            counter += 1
+        }
+        return candidate
     }
 }
 
