@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import AVKit
 
 enum MovesFilter: String, CaseIterable, Identifiable {
     case named, unnamed, excluded, all
@@ -76,23 +75,22 @@ struct MovesView: View {
             ScrollViewReader { proxy in
                 List {
                     ForEach(moveGroups) { group in
-                        Section {
-                            ForEach(group.moves) { move in
-                                MoveRowView(
-                                    move: move,
-                                    isActive: activeMoveID == move.id,
-                                    onTap: { activate(move) },
-                                    onCycleStatus: { cycleStatus(move) },
-                                    onDelete: { delete(move) },
-                                    onRename: { newName in rename(move, to: newName) },
-                                    onExclude: { toggleExclude(move) }
-                                )
-                                .id(move.id)
-                                .listRowSeparator(.hidden)
-                                .listRowInsets(EdgeInsets())
-                            }
-                        } header: {
-                            moveGroupHeader(title: group.title, count: group.moves.count)
+                        moveGroupHeader(title: group.title, count: group.moves.count)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets())
+                        ForEach(group.moves) { move in
+                            MoveRowView(
+                                move: move,
+                                isActive: activeMoveID == move.id,
+                                onTap: { activate(move) },
+                                onCycleStatus: { cycleStatus(move) },
+                                onDelete: { delete(move) },
+                                onRename: { newName in rename(move, to: newName) },
+                                onExclude: { toggleExclude(move) }
+                            )
+                            .id(move.id)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets())
                         }
                     }
 
@@ -150,30 +148,8 @@ struct MovesView: View {
                     await playPendingMoveIfNeeded()
                 }
             }
-            .navigationTitle("Moves")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    filterMenu
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
         }
-    }
-
-    private var filterMenu: some View {
-        Menu {
-            Picker("Filter", selection: $filter) {
-                Text("Named").tag(MovesFilter.named)
-                Text("Unnamed").tag(MovesFilter.unnamed)
-                Text("Excluded").tag(MovesFilter.excluded)
-                Text("All").tag(MovesFilter.all)
-            }
-        } label: {
-            Image(systemName: filter == .named
-                ? "line.3.horizontal.decrease.circle"
-                : "line.3.horizontal.decrease.circle.fill")
-        }
-        .accessibilityLabel("Filter: \(filter.label)")
     }
 
     private func moveGroupHeader(title: String, count: Int) -> some View {
@@ -299,36 +275,105 @@ struct MovesView: View {
         VStack(spacing: 0) {
             if let move = activeMove, let video = move.video {
                 playerSection(video: video)
-                    .id(video.id)
             } else {
                 playerPlaceholder
             }
         }
         .background(.background)
-        .overlay(alignment: .bottom) { Divider() }
     }
 
     @ViewBuilder
     private func playerSection(video: Video) -> some View {
         VStack(spacing: 0) {
-            VideoPlayer(player: controller.player)
-                .id(video.id)
-                .aspectRatio(16 / 9, contentMode: .fit)
-                .frame(maxWidth: .infinity)
-                .background(Color.black)
+            ZStack {
+                Color.black
+                VideoPlayerSurface(controller: controller)
+                    .aspectRatio(playerAspectRatio, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .padding(12)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 320)
+            .overlay(alignment: .top) {
+                TimestampPill(time: controller.currentTime)
+                    .padding(.top, 18)
+                    .allowsHitTesting(false)
+            }
+            .overlay(alignment: .topTrailing) {
+                playerRail
+                    .padding(.top, 18)
+                    .padding(.trailing, 18)
+            }
 
-            PlayerControlsBar(controller: controller, onSplit: split)
+            HStack(spacing: 8) {
+                Button {
+                    controller.toggle()
+                    Haptics.light()
+                } label: {
+                    Image(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.title3)
+                        .frame(width: 36, height: 36)
+                }
+                .disabled(controller.duration == 0)
 
-            TrimTrackView(
-                controller: controller,
-                videoID: video.id,
-                videoURL: video.fileURL,
-                moves: activeVideoMoves,
-                allowsMarkerEditing: true
-            )
-            .frame(height: 44)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 12)
+                TrimTrackView(
+                    controller: controller,
+                    videoID: video.id,
+                    videoURL: video.fileURL,
+                    moves: activeVideoMoves,
+                    allowsMarkerEditing: true
+                )
+                .frame(height: 44)
+            }
+            .padding(.horizontal, 12)
+        }
+    }
+
+    private var playerAspectRatio: CGFloat {
+        let size = controller.videoSize
+        guard size.width > 0, size.height > 0 else { return 9.0 / 16.0 }
+        return size.width / size.height
+    }
+
+    private var playerRail: some View {
+        VStack(spacing: 14) {
+            Menu {
+                Picker("Filter", selection: $filter) {
+                    Text("Named").tag(MovesFilter.named)
+                    Text("Unnamed").tag(MovesFilter.unnamed)
+                    Text("Excluded").tag(MovesFilter.excluded)
+                    Text("All").tag(MovesFilter.all)
+                }
+            } label: {
+                RailIcon(systemName: filter == .named
+                    ? "line.3.horizontal.decrease.circle"
+                    : "line.3.horizontal.decrease.circle.fill")
+            }
+            .accessibilityLabel("Filter: \(filter.label)")
+
+            Button {
+                controller.isMuted.toggle()
+                Haptics.light()
+            } label: {
+                RailIcon(systemName: controller.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+            }
+            .accessibilityLabel(controller.isMuted ? "Unmute" : "Mute")
+
+            Button {
+                controller.isLooping.toggle()
+                Haptics.light()
+            } label: {
+                RailIcon(systemName: "repeat", active: controller.isLooping)
+            }
+            .accessibilityLabel(controller.isLooping ? "Loop on" : "Loop off")
+
+            Button {
+                split()
+            } label: {
+                RailIcon(systemName: "scissors")
+            }
+            .disabled(controller.duration == 0)
+            .accessibilityLabel("Split")
         }
     }
 
@@ -410,8 +455,7 @@ struct MovesView: View {
         let videoURL = video.fileURL
 
         if controller.currentVideoURL != videoURL {
-            controller.pause()
-            controller = PlaybackController(videoURL: videoURL)
+            controller.loadVideo(url: videoURL)
         }
 
         activeMoveID = move.id

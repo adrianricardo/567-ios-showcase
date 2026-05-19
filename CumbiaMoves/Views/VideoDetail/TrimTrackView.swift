@@ -14,7 +14,6 @@ struct TrimTrackView: View {
     @State private var hasMoved = false
     @State private var pressLocationX: CGFloat = 0
 
-    // Armed marker state (set on long-press success)
     @State private var armedMarkerIdx: Int?
     @State private var armedOriginalTime: TimeInterval = 0
     @State private var armedStartPlayhead: TimeInterval = 0
@@ -63,7 +62,6 @@ struct TrimTrackView: View {
                     .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
             }
 
-            // Excluded segment dim overlays
             ForEach(moves.filter(\.isExcluded)) { move in
                 let x = xFor(move.time)
                 let w = xFor(move.endTime ?? dur) - x
@@ -74,7 +72,6 @@ struct TrimTrackView: View {
                     .allowsHitTesting(false)
             }
 
-            // Split markers (at each segment boundary except first/last)
             ForEach(Array(moves.dropLast().enumerated()), id: \.offset) { idx, move in
                 let mx = xFor(move.endTime ?? dur)
                 let active = isMarkerActive(idx)
@@ -88,7 +85,6 @@ struct TrimTrackView: View {
                     .allowsHitTesting(false)
             }
 
-            // Playhead
             Capsule()
                 .fill(Color.white)
                 .shadow(radius: isDraggingPlayhead ? 4 : 2)
@@ -109,8 +105,6 @@ struct TrimTrackView: View {
         .gesture(combinedGesture)
     }
 
-    // MARK: - Gesture
-
     private var combinedGesture: some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .local)
             .onChanged(handleDragChanged)
@@ -130,7 +124,6 @@ struct TrimTrackView: View {
         if moved { hasMoved = true }
 
         if dragTarget == nil, moved, armedMarkerIdx == nil {
-            // User moved before long-press could arm — scrub.
             dragTarget = .playhead
             controller.pause()
         }
@@ -147,7 +140,6 @@ struct TrimTrackView: View {
 
     private func handleDragEnded(_ value: DragGesture.Value) {
         if !hasMoved, dragTarget == nil {
-            // Tap-to-seek.
             controller.seek(to: timeFor(value.startLocation.x))
         }
 

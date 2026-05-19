@@ -155,12 +155,12 @@ struct PlayerControlsBar: View {
                 onSplit()
             } label: {
                 Label("Split", systemImage: "scissors")
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 12)
-                    .frame(height: 36)
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 8)
+                    .frame(height: 25)
             }
             .buttonStyle(.borderedProminent)
-            .controlSize(.regular)
+            .controlSize(.small)
             .disabled(controller.duration == 0)
 
             Spacer(minLength: 8)

@@ -10,9 +10,13 @@ import OSLog
     private(set) var duration: TimeInterval = 0
     private(set) var isPlaying = false
     private(set) var currentVideoURL: URL?
+    private(set) var videoSize: CGSize = .zero
 
     var isLooping: Bool = false {
         didSet { updateLoopObserver() }
+    }
+    var isMuted: Bool = false {
+        didSet { player.isMuted = isMuted }
     }
     private(set) var activeRangeStart: TimeInterval?
     private(set) var activeRangeEnd: TimeInterval?
@@ -40,6 +44,7 @@ import OSLog
         player.pause()
         duration = 0
         currentTime = 0
+        videoSize = .zero
         pendingPlaybackStart = nil
         pendingPlaybackEnd = nil
         assetPreflightTask?.cancel()
@@ -229,7 +234,9 @@ import OSLog
         let interval = CMTime(value: 1, timescale: 30)
         periodicObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             MainActor.assumeIsolated {
-                self?.currentTime = time.seconds
+                let seconds = time.seconds
+                guard seconds.isFinite, seconds >= 0 else { return }
+                self?.currentTime = seconds
             }
         }
 
@@ -247,6 +254,15 @@ import OSLog
             }
             .store(in: &cancellables)
 
+        player.publisher(for: \.currentItem?.presentationSize)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] size in
+                guard let self, let size,
+                      size.width > 0, size.height > 0,
+                      size != self.videoSize else { return }
+                self.videoSize = size
+            }
+            .store(in: &cancellables)
     }
 
     private func currentPlayableDuration() -> TimeInterval? {
