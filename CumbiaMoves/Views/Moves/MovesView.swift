@@ -28,7 +28,7 @@ struct MovesView: View {
     @State private var activeMoveID: UUID?
     @State private var pendingAutoplayMoveID: UUID?
     @State private var activeVideoMoves: [Move] = []
-    @State private var filter: MovesFilter = .named
+    @AppStorage("movesFilter") private var filter: MovesFilter = .all
     @State private var moves: [Move] = []
     @State private var isLoading = false
     @State private var canLoadMore = false
@@ -149,7 +149,9 @@ struct MovesView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
         }
+        .statusBarHidden(false)
     }
 
     private func moveGroupHeader(title: String, count: Int) -> some View {
@@ -279,7 +281,7 @@ struct MovesView: View {
                 playerPlaceholder
             }
         }
-        .background(.background)
+        .background(Color.black.ignoresSafeArea(edges: .top))
     }
 
     @ViewBuilder
@@ -318,6 +320,8 @@ struct MovesView: View {
             )
             .frame(height: 52)
             .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 16)
         }
     }
 
@@ -427,6 +431,7 @@ struct MovesView: View {
             let m2 = Move(name: "", time: t, endTime: videoDur, video: video)
             modelContext.insert(m1)
             modelContext.insert(m2)
+            moves.append(contentsOf: [m1, m2])
         } else {
             guard let segment = sorted.first(where: {
                 $0.time <= t && t < ($0.endTime ?? videoDur)
@@ -436,6 +441,7 @@ struct MovesView: View {
             let after = Move(name: "", time: t, endTime: segment.endTime ?? videoDur, video: video)
             modelContext.insert(after)
             segment.endTime = t
+            moves.append(after)
         }
 
         Haptics.medium()

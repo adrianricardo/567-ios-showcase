@@ -24,6 +24,7 @@ targets:
       - path: CumbiaMoves
     resources:
       - path: CumbiaMoves/Resources/Assets.xcassets
+      - path: CumbiaMoves/Resources/PrivacyInfo.xcprivacy
     info:
       path: CumbiaMoves/Resources/Info.plist
       properties:
@@ -35,8 +36,6 @@ targets:
           UIApplicationSupportsMultipleScenes: false
         UIRequiresFullScreen: false
         NSPhotoLibraryUsageDescription: "Cumbia Moves needs access to your library to import practice videos."
-        UIBackgroundModes:
-          - audio
         NSSupportsLiveActivities: false
     settings:
       base:
