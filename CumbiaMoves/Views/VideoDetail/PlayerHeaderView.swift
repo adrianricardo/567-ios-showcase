@@ -21,6 +21,7 @@ struct PlayerAndTrimSection: View {
                 video: video,
                 controller: controller,
                 isCollapsed: $isCollapsed,
+                hasSegments: !moves.isEmpty,
                 onExpand: {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
                         isCollapsed = false
@@ -77,12 +78,19 @@ struct PlayerHeaderView: View {
     let video: Video
     let controller: PlaybackController
     @Binding var isCollapsed: Bool
+    let hasSegments: Bool
     let onExpand: () -> Void
     let onSplit: () -> Void
 
     var body: some View {
         ZStack(alignment: .top) {
-            PlayerFullView(video: video, controller: controller, isCollapsed: $isCollapsed, onSplit: onSplit)
+            PlayerFullView(
+                video: video,
+                controller: controller,
+                isCollapsed: $isCollapsed,
+                hasSegments: hasSegments,
+                onSplit: onSplit
+            )
                 .opacity(isCollapsed ? 0 : 1)
                 .allowsHitTesting(!isCollapsed)
 
@@ -102,6 +110,7 @@ struct PlayerFullView: View {
     let video: Video
     let controller: PlaybackController
     @Binding var isCollapsed: Bool
+    let hasSegments: Bool
     let onSplit: () -> Void
     @Environment(\.modelContext) private var modelContext
 
@@ -132,7 +141,11 @@ struct PlayerFullView: View {
                 .frame(maxWidth: .infinity)
                 .background(Color.black)
 
-            PlayerControlsBar(controller: controller, onSplit: onSplit)
+            PlayerControlsBar(
+                controller: controller,
+                hasSegments: hasSegments,
+                onSplit: onSplit
+            )
         }
     }
 }
@@ -141,6 +154,7 @@ struct PlayerFullView: View {
 
 struct PlayerControlsBar: View {
     let controller: PlaybackController
+    let hasSegments: Bool
     let onSplit: () -> Void
 
     var body: some View {
@@ -153,17 +167,7 @@ struct PlayerControlsBar: View {
 
             Spacer(minLength: 8)
 
-            Button {
-                onSplit()
-            } label: {
-                Label("Split", systemImage: "scissors")
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 8)
-                    .frame(height: 25)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
-            .disabled(controller.duration == 0)
+            splitButton
 
             Spacer(minLength: 8)
 
@@ -181,6 +185,30 @@ struct PlayerControlsBar: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .frame(height: 56)
+    }
+
+    @ViewBuilder
+    private var splitButton: some View {
+        Button {
+            onSplit()
+        } label: {
+            if hasSegments {
+                Label("Split", systemImage: "scissors")
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 8)
+                    .frame(height: 25)
+            } else {
+                Label("Split into Move", systemImage: "scissors")
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 18)
+                    .frame(height: 38)
+            }
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(hasSegments ? .small : .regular)
+        .disabled(controller.duration == 0)
+        .accessibilityLabel(hasSegments ? "Split" : "Split into a new move")
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: hasSegments)
     }
 }
 

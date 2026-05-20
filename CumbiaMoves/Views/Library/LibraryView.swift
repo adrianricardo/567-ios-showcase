@@ -247,9 +247,6 @@ struct LibraryView: View {
         )
         modelContext.insert(video)
 
-        let initialMove = Move(name: "", time: 0, endTime: video.duration, video: video)
-        modelContext.insert(initialMove)
-
         let videoURL = video.fileURL
         let videoID = video.id
         let duration = video.duration

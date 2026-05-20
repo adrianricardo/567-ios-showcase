@@ -60,13 +60,9 @@ struct VideoDetailView: View {
                 }
 
                 if sortedMoves.isEmpty {
-                    ContentUnavailableView(
-                        "No Segments Yet",
-                        systemImage: "scissors",
-                        description: Text("Scrub to a moment and tap Split to divide the video.")
-                    )
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets())
+                    EmptyMovesCoach()
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets())
                 }
             }
             .listStyle(.plain)
@@ -231,5 +227,43 @@ struct VideoDetailView: View {
     ) -> TimeInterval {
         guard let endTime, endTime.isFinite else { return duration }
         return max(start, min(endTime, duration))
+    }
+}
+
+// MARK: - Empty-state coach
+
+private struct EmptyMovesCoach: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Split this video into moves")
+                .font(.title3.weight(.semibold))
+
+            VStack(alignment: .leading, spacing: 10) {
+                CoachStep(number: 1, text: "Play the video above.")
+                CoachStep(number: 2, text: "Tap **Split** each time a new move starts.")
+                CoachStep(number: 3, text: "Name each segment so you can find it later.")
+            }
+            .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct CoachStep: View {
+    let number: Int
+    let text: LocalizedStringKey
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text("\(number)")
+                .font(.footnote.weight(.bold).monospacedDigit())
+                .foregroundStyle(.white)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(Color.accentColor))
+            Text(text)
+                .font(.subheadline)
+        }
     }
 }
