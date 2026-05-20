@@ -7,7 +7,9 @@ struct TrimTrackView: View {
     let moves: [Move]
     let allowsMarkerEditing: Bool
     var fillsVisibleRange = false
+    var showsPlaceholderWhenEmpty = false
     var onTapSegment: ((Move, TimeInterval) -> Void)? = nil
+    var onHandleDragComplete: (() -> Void)? = nil
 
     @State private var trackWidth: CGFloat = 1
     @State private var dragTarget: DragTarget?
@@ -63,13 +65,17 @@ struct TrimTrackView: View {
                 .strokeBorder(railStroke, lineWidth: 1)
                 .frame(height: trackHeight)
 
-            ForEach(timelineMoves) { move in
-                segmentView(for: move)
-            }
+            if timelineMoves.isEmpty, showsPlaceholderWhenEmpty {
+                placeholderPill
+            } else {
+                ForEach(timelineMoves) { move in
+                    segmentView(for: move)
+                }
 
-            if allowsMarkerEditing {
-                ForEach(Array(timelineMoves.dropLast().enumerated()), id: \.offset) { idx, move in
-                    handleView(at: xFor(move.endTime ?? dur), active: isHandleActive(idx))
+                if allowsMarkerEditing {
+                    ForEach(Array(timelineMoves.dropLast().enumerated()), id: \.offset) { idx, move in
+                        handleView(at: xFor(move.endTime ?? dur), active: isHandleActive(idx))
+                    }
                 }
             }
         }
@@ -83,6 +89,23 @@ struct TrimTrackView: View {
         )
         .contentShape(Rectangle())
         .gesture(dragGesture)
+    }
+
+    private var placeholderPill: some View {
+        let progressWidth = trackWidth > 0
+            ? trackWidth * CGFloat(min(1, max(0, controller.currentTime / max(0.001, dur))))
+            : 0
+        return ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(trackFill)
+            if progressWidth > 0 {
+                Rectangle()
+                    .fill(playedFill)
+                    .frame(width: progressWidth)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .frame(height: trackHeight)
     }
 
     @ViewBuilder
@@ -209,6 +232,7 @@ struct TrimTrackView: View {
 
         if case .handle = dragTarget {
             Haptics.light()
+            if hasMoved { onHandleDragComplete?() }
         }
 
         dragTarget = nil

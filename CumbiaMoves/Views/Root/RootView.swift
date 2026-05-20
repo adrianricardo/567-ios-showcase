@@ -1,17 +1,13 @@
 import SwiftUI
 
 struct RootView: View {
-    @State private var selectedTab: AppTab = .library
-
-    private enum AppTab {
-        case moves
-        case library
-    }
+    @Environment(AppRouter.self) private var router
 
     var body: some View {
-        TabView(selection: $selectedTab) {
+        @Bindable var router = router
+        TabView(selection: $router.selectedTab) {
             Group {
-                if selectedTab == .moves {
+                if router.selectedTab == .moves {
                     MovesView()
                 } else {
                     Color.clear

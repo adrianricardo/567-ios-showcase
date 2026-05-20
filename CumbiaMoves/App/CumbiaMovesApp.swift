@@ -4,6 +4,8 @@ import SwiftData
 @main
 struct CumbiaMovesApp: App {
     @State private var loadResult: Result<ModelContainer, Error>
+    @State private var playbackSession = PlaybackSession()
+    @State private var router = AppRouter()
 
     init() {
         _loadResult = State(initialValue: Self.loadContainer())
@@ -15,6 +17,8 @@ struct CumbiaMovesApp: App {
             case .success(let container):
                 RootView()
                     .modelContainer(container)
+                    .environment(playbackSession)
+                    .environment(router)
             case .failure(let error):
                 MigrationFailureView(error: error) {
                     Self.wipeDefaultStore()
