@@ -2,19 +2,21 @@ import SwiftUI
 import SwiftData
 import OSLog
 
-private struct ScrollOffsetKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
-
 struct VideoDetailView: View {
     let video: Video
     @State private var controller: PlaybackController
-    @State private var isCollapsed = false
-    @State private var initialSentinelY: CGFloat?
     @State private var activeMoveID: UUID?
     @State private var sortedMoves: [Move] = []
+    @State private var showRename = false
+    @State private var showDeleteConfirm = false
+
+    @AppStorage("coach.splitTipSeen") private var splitTipSeen = false
+    @AppStorage("coach.dragTipSeen") private var dragTipSeen = false
+    @AppStorage("coach.nameTipSeen") private var nameTipSeen = false
+
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @Environment(AppRouter.self) private var router
     private let logger = Logger(subsystem: "CumbiaMoves", category: "VideoDetail")
 
     init(video: Video) {
@@ -28,80 +30,190 @@ struct VideoDetailView: View {
         return sortedMoves.first { $0.id == id }
     }
 
+    private var firstUnnamedMove: Move? {
+        sortedMoves.first { $0.name.isEmpty }
+    }
+
+    private var showSplitTip: Bool { !splitTipSeen }
+    private var showDragTip: Bool { splitTipSeen && !dragTipSeen && sortedMoves.count >= 2 }
+    private var showNameTip: Bool { dragTipSeen && !nameTipSeen && firstUnnamedMove != nil }
+    private var hasMoves: Bool { !sortedMoves.isEmpty }
+
     var body: some View {
         ScrollViewReader { proxy in
-            List {
-                Color.clear
-                    .frame(height: 0)
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets())
-                    .background(
-                        GeometryReader { geo in
-                            Color.clear.preference(
-                                key: ScrollOffsetKey.self,
-                                value: geo.frame(in: .global).minY
-                            )
-                        }
-                    )
-
-                ForEach(sortedMoves) { move in
-                    MoveRowView(
-                        move: move,
-                        isActive: activeMoveID == move.id,
-                        onTap: { activateMove(move) },
-                        onCycleStatus: { cycleStatus(move) },
-                        onDelete: { deleteMove(move) },
-                        onRename: { newName in renameMove(move, to: newName) },
-                        onExclude: { toggleExclude(move) }
-                    )
-                    .id(move.id)
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets())
+            contentList
+                .environment(controller)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    heroSection
                 }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if let m = activeMove {
+                        NowPlayingStripView(move: m) {
+                            withAnimation { proxy.scrollTo(m.id, anchor: .center) }
+                        }
+                    }
+                }
+                .onChange(of: controller.currentTime) { _, t in
+                    advanceActiveMove(currentTime: t)
+                }
+                .onChange(of: video.moves.count) {
+                    refreshSortedMoves()
+                }
+                .onAppear {
+                    refreshSortedMoves()
+                    controller.play()
+                }
+                .navigationBarBackButtonHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
+                .toolbar(.hidden, for: .tabBar)
+                .toolbarColorScheme(.dark, for: .navigationBar)
+                .sheet(isPresented: $showRename) {
+                    RenameSheet(
+                        title: "Rename Video",
+                        isPresented: $showRename,
+                        initial: video.displayName
+                    ) { newName in
+                        video.displayName = newName
+                    }
+                }
+                .confirmationDialog(
+                    "Delete \"\(video.displayName)\"?",
+                    isPresented: $showDeleteConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("Delete Video & All Moves", role: .destructive) {
+                        deleteCurrentVideo()
+                    }
+                    Button("Cancel", role: .cancel) {}
+                }
+        }
+    }
 
-                if sortedMoves.isEmpty {
-                    EmptyMovesCoach()
+    // MARK: - Sections
+
+    private var heroSection: some View {
+        VStack(spacing: 0) {
+            topBar
+            VideoHeroView(
+                controller: controller,
+                video: video,
+                moves: sortedMoves,
+                allowsMarkerEditing: true,
+                showsPlaceholderWhenEmpty: true,
+                onHandleDragComplete: { dragTipSeen = true }
+            ) {
+                VStack(spacing: 14) {
+                    MuteRailButton()
+                    LoopRailButton(controller: controller)
+                    SplitRailButton(controller: controller, onSplit: split)
+                }
+                .overlay(alignment: .leading) {
+                    if showSplitTip {
+                        CoachTip(text: "Tap to split this video into moves", arrow: .right)
+                            .fixedSize()
+                            .offset(x: -10)
+                            .alignmentGuide(.leading) { d in d[.trailing] }
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    }
+                }
+                .animation(.easeInOut(duration: 0.2), value: showSplitTip)
+            }
+        }
+    }
+
+    private var topBar: some View {
+        HStack(spacing: 8) {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("Back")
+
+            Spacer(minLength: 0)
+
+            Text(video.displayName)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            if hasMoves {
+                Button {
+                    finishEditing()
+                } label: {
+                    Text("Done")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 12)
+                        .frame(height: 44)
+                }
+                .accessibilityLabel("Done editing")
+            } else {
+                Menu {
+                    Button {
+                        showRename = true
+                    } label: {
+                        Label("Rename Video", systemImage: "pencil")
+                    }
+                    Divider()
+                    Button(role: .destructive) {
+                        showDeleteConfirm = true
+                    } label: {
+                        Label("Delete Video", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3)
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("More")
+            }
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 44)
+        .background(Color.black)
+    }
+
+    @ViewBuilder
+    private var contentList: some View {
+        List {
+            if showDragTip {
+                CoachTip(text: "Tap and hold the divider to adjust the split point", arrow: .up)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 10)
+                    .padding(.bottom, 6)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets())
+            }
+
+            ForEach(sortedMoves) { move in
+                MoveRowView(
+                    move: move,
+                    isActive: activeMoveID == move.id,
+                    onTap: { activateMove(move) },
+                    onCycleStatus: { cycleStatus(move) },
+                    onDelete: { deleteMove(move) },
+                    onRename: { newName in renameMove(move, to: newName) },
+                    onExclude: { toggleExclude(move) }
+                )
+                .id(move.id)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets())
+
+                if showNameTip, move.id == firstUnnamedMove?.id {
+                    CoachTip(text: "Tap **Add name** to label this clip", arrow: .up)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.trailing, 16)
+                        .padding(.vertical, 6)
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets())
                 }
             }
-            .listStyle(.plain)
-            .environment(controller)
-            .onPreferenceChange(ScrollOffsetKey.self) { globalY in
-                if initialSentinelY == nil { initialSentinelY = globalY }
-                let scrolled = (initialSentinelY ?? globalY) - globalY
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                    isCollapsed = scrolled > 24
-                }
-            }
-            .safeAreaInset(edge: .top, spacing: 0) {
-                PlayerAndTrimSection(
-                    video: video,
-                    controller: controller,
-                    moves: sortedMoves,
-                    isCollapsed: $isCollapsed,
-                    onSplit: split
-                )
-            }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if let m = activeMove {
-                    NowPlayingStripView(move: m) {
-                        withAnimation { proxy.scrollTo(m.id, anchor: .center) }
-                    }
-                }
-            }
-            .onChange(of: controller.currentTime) { _, t in
-                advanceActiveMove(currentTime: t)
-            }
-            .onChange(of: video.moves.count) {
-                refreshSortedMoves()
-            }
-            .onAppear {
-                refreshSortedMoves()
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar(.hidden, for: .tabBar)
         }
+        .listStyle(.plain)
     }
 
     // MARK: - Actions
@@ -130,7 +242,24 @@ struct VideoDetailView: View {
         }
 
         Haptics.medium()
+        splitTipSeen = true
         refreshSortedMoves()
+    }
+
+    private func deleteCurrentVideo() {
+        let videoID = video.id
+        Task { await ThumbnailService.shared.clearCache(for: videoID) }
+        try? FileManager.default.removeItem(at: video.fileURL)
+        modelContext.delete(video)
+        dismiss()
+        Haptics.medium()
+    }
+
+    private func finishEditing() {
+        controller.pause()
+        Haptics.success()
+        router.selectedTab = .moves
+        dismiss()
     }
 
     private func activateMove(_ move: Move) {
@@ -189,6 +318,7 @@ struct VideoDetailView: View {
     private func renameMove(_ move: Move, to name: String) {
         move.name = name
         move.updatedAt = Date()
+        if !name.isEmpty { nameTipSeen = true }
         Haptics.success()
     }
 
@@ -227,43 +357,5 @@ struct VideoDetailView: View {
     ) -> TimeInterval {
         guard let endTime, endTime.isFinite else { return duration }
         return max(start, min(endTime, duration))
-    }
-}
-
-// MARK: - Empty-state coach
-
-private struct EmptyMovesCoach: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Split this video into moves")
-                .font(.title3.weight(.semibold))
-
-            VStack(alignment: .leading, spacing: 10) {
-                CoachStep(number: 1, text: "Play the video above.")
-                CoachStep(number: 2, text: "Tap **Split** each time a new move starts.")
-                CoachStep(number: 3, text: "Name each segment so you can find it later.")
-            }
-            .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 24)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct CoachStep: View {
-    let number: Int
-    let text: LocalizedStringKey
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text("\(number)")
-                .font(.footnote.weight(.bold).monospacedDigit())
-                .foregroundStyle(.white)
-                .frame(width: 22, height: 22)
-                .background(Circle().fill(Color.accentColor))
-            Text(text)
-                .font(.subheadline)
-        }
     }
 }
