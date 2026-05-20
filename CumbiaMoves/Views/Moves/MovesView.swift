@@ -286,91 +286,38 @@ struct MovesView: View {
 
     @ViewBuilder
     private func playerSection(video: Video) -> some View {
-        VStack(spacing: 0) {
-            ZStack {
-                Color.black
-                VideoPlayerSurface(controller: controller)
-                    .aspectRatio(playerAspectRatio, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .padding(12)
+        VideoHeroView(
+            controller: controller,
+            video: video,
+            moves: activeVideoMoves,
+            allowsMarkerEditing: true,
+            onTapSegment: { move, time in
+                selectSegment(move, at: time)
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 320)
-            .overlay(alignment: .top) {
-                TimestampPill(time: controller.currentTime)
-                    .padding(.top, 18)
-                    .allowsHitTesting(false)
+        ) {
+            VStack(spacing: 14) {
+                filterMenuButton
+                MuteRailButton()
+                LoopRailButton(controller: controller)
+                SplitRailButton(controller: controller, onSplit: split)
             }
-            .overlay(alignment: .topTrailing) {
-                playerRail
-                    .padding(.top, 18)
-                    .padding(.trailing, 18)
-            }
-
-            TrimTrackView(
-                controller: controller,
-                videoID: video.id,
-                videoURL: video.fileURL,
-                moves: activeVideoMoves,
-                allowsMarkerEditing: true,
-                fillsVisibleRange: true,
-                onTapSegment: { move, time in
-                    selectSegment(move, at: time)
-                }
-            )
-            .frame(height: 52)
-            .padding(.horizontal, 16)
-            .padding(.top, 14)
-            .padding(.bottom, 16)
         }
     }
 
-    private var playerAspectRatio: CGFloat {
-        let size = controller.videoSize
-        guard size.width > 0, size.height > 0 else { return 9.0 / 16.0 }
-        return size.width / size.height
-    }
-
-    private var playerRail: some View {
-        VStack(spacing: 14) {
-            Menu {
-                Picker("Filter", selection: $filter) {
-                    Text("Named").tag(MovesFilter.named)
-                    Text("Unnamed").tag(MovesFilter.unnamed)
-                    Text("Excluded").tag(MovesFilter.excluded)
-                    Text("All").tag(MovesFilter.all)
-                }
-            } label: {
-                RailIcon(systemName: filter == .named
-                    ? "line.3.horizontal.decrease.circle"
-                    : "line.3.horizontal.decrease.circle.fill")
+    private var filterMenuButton: some View {
+        Menu {
+            Picker("Filter", selection: $filter) {
+                Text("Named").tag(MovesFilter.named)
+                Text("Unnamed").tag(MovesFilter.unnamed)
+                Text("Excluded").tag(MovesFilter.excluded)
+                Text("All").tag(MovesFilter.all)
             }
-            .accessibilityLabel("Filter: \(filter.label)")
-
-            Button {
-                controller.isMuted.toggle()
-                Haptics.light()
-            } label: {
-                RailIcon(systemName: controller.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-            }
-            .accessibilityLabel(controller.isMuted ? "Unmute" : "Mute")
-
-            Button {
-                controller.isLooping.toggle()
-                Haptics.light()
-            } label: {
-                RailIcon(systemName: "repeat", active: controller.isLooping)
-            }
-            .accessibilityLabel(controller.isLooping ? "Loop on" : "Loop off")
-
-            Button {
-                split()
-            } label: {
-                RailIcon(systemName: "scissors")
-            }
-            .disabled(controller.duration == 0)
-            .accessibilityLabel("Split")
+        } label: {
+            RailIcon(systemName: filter == .named
+                ? "line.3.horizontal.decrease.circle"
+                : "line.3.horizontal.decrease.circle.fill")
         }
+        .accessibilityLabel("Filter: \(filter.label)")
     }
 
     private var playerPlaceholder: some View {
