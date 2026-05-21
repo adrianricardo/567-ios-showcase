@@ -18,9 +18,9 @@ struct RootView: View {
                 }
                 .tag(AppTab.moves)
 
-            LibraryView()
+            VideoFeedView()
                 .tabItem {
-                    Label("Videos", systemImage: "film.stack")
+                    Label("Explore", systemImage: "play.rectangle.on.rectangle.fill")
                 }
                 .tag(AppTab.library)
         }
