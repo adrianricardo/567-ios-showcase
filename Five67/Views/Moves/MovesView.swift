@@ -147,6 +147,9 @@ struct MovesView: View {
                 .task(id: pendingAutoplayMoveID) {
                     await playPendingMoveIfNeeded()
                 }
+                .onChange(of: controller.currentTime) { _, t in
+                    syncActiveMoveToPlayhead(t)
+                }
             }
             .toolbar(.hidden, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
@@ -170,7 +173,6 @@ struct MovesView: View {
         .textCase(nil)
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
-        .background(Color(.systemGroupedBackground))
     }
 
     private func groupTitle(for video: Video) -> String {
@@ -216,6 +218,9 @@ struct MovesView: View {
             }
             if replacing {
                 moves = fetched
+                if activeMoveID == nil, let first = moveGroups.first?.moves.first {
+                    activate(first)
+                }
             } else {
                 moves.append(contentsOf: fetched)
             }
@@ -274,14 +279,10 @@ struct MovesView: View {
 
     @ViewBuilder
     private var topSection: some View {
-        VStack(spacing: 0) {
-            if let move = activeMove, let video = move.video {
-                playerSection(video: video)
-            } else {
-                playerPlaceholder
-            }
+        if let move = activeMove, let video = move.video {
+            playerSection(video: video)
+                .background(Color.black.ignoresSafeArea(edges: .top))
         }
-        .background(Color.black.ignoresSafeArea(edges: .top))
     }
 
     @ViewBuilder
@@ -318,23 +319,6 @@ struct MovesView: View {
                 : "line.3.horizontal.decrease.circle.fill")
         }
         .accessibilityLabel("Filter: \(filter.label)")
-    }
-
-    private var playerPlaceholder: some View {
-        ZStack {
-            Rectangle()
-                .fill(Color(.systemGray6))
-                .aspectRatio(16 / 9, contentMode: .fit)
-                .frame(maxWidth: .infinity)
-            VStack(spacing: 6) {
-                Image(systemName: "play.circle")
-                    .font(.system(size: 32))
-                    .foregroundStyle(.tertiary)
-                Text("Tap a move to play")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-        }
     }
 
     @ViewBuilder
@@ -393,6 +377,20 @@ struct MovesView: View {
 
         Haptics.medium()
         activeVideoMoves = video.movesSorted
+    }
+
+    private func syncActiveMoveToPlayhead(_ t: TimeInterval) {
+        guard !controller.isLooping else { return }
+        guard let current = activeMove, let video = current.video else { return }
+        let dur = video.duration
+        guard let segment = activeVideoMoves.first(where: { move in
+            let start = move.time
+            let end = move.endTime ?? dur
+            return t >= start && t < end
+        }) else { return }
+        if segment.id != activeMoveID {
+            activeMoveID = segment.id
+        }
     }
 
     private func activate(_ move: Move) {

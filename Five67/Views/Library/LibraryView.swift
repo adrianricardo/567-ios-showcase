@@ -5,7 +5,10 @@ import PhotosUI
 
 struct LibraryView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Video.importedAt, order: .reverse) private var videos: [Video]
+    @Query(sort: [
+        SortDescriptor(\Video.recordedAt, order: .reverse),
+        SortDescriptor(\Video.importedAt, order: .reverse)
+    ]) private var videos: [Video]
 
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var showPhotosPicker = false
@@ -15,6 +18,11 @@ struct LibraryView: View {
     @State private var showError = false
     @State private var deleteTarget: Video?
     @State private var showDeleteConfirm = false
+
+    // Multi-import preview
+    @State private var pendingImportItems: [PhotosPickerItem] = []
+    @State private var pendingDuplicateCount: Int = 0
+    @State private var showImportPreview = false
 
     // Export state
     @State private var isExporting = false
@@ -50,7 +58,7 @@ struct LibraryView: View {
                     .listStyle(.plain)
                 }
             }
-            .navigationTitle("Cumbia Moves")
+            .navigationTitle("Five67")
             .navigationDestination(for: Video.self) { video in
                 VideoDetailView(video: video)
             }
@@ -106,8 +114,9 @@ struct LibraryView: View {
             guard !items.isEmpty else { return }
             let batch = items
             pickerItems = []
-            Task { await handlePhotosImport(batch) }
+            routePhotosBatch(batch)
         }
+        .sheet(isPresented: $showImportPreview) { importPreviewSheet }
         .fileImporter(
             isPresented: $showFilesImporter,
             allowedContentTypes: [.movie],
@@ -180,6 +189,53 @@ struct LibraryView: View {
         } description: {
             Text("Tap + to import a practice video from Photos.")
         }
+    }
+
+    private var importPreviewSheet: some View {
+        ImportPreviewSheet(
+            newCount: pendingImportItems.count,
+            duplicateCount: pendingDuplicateCount,
+            onContinue: confirmImportPreview,
+            onCancel: cancelImportPreview
+        )
+    }
+
+    private func confirmImportPreview() {
+        let toImport = pendingImportItems
+        pendingImportItems = []
+        pendingDuplicateCount = 0
+        showImportPreview = false
+        if !toImport.isEmpty {
+            Task { await handlePhotosImport(toImport) }
+        }
+    }
+
+    private func cancelImportPreview() {
+        pendingImportItems = []
+        pendingDuplicateCount = 0
+        showImportPreview = false
+    }
+
+    private func routePhotosBatch(_ items: [PhotosPickerItem]) {
+        let existingSourceIDs = Set(videos.compactMap { $0.sourceAssetID })
+        var newItems: [PhotosPickerItem] = []
+        var duplicateCount = 0
+        for item in items {
+            if let id = item.itemIdentifier, existingSourceIDs.contains(id) {
+                duplicateCount += 1
+            } else {
+                newItems.append(item)
+            }
+        }
+
+        if duplicateCount == 0 {
+            Task { await handlePhotosImport(newItems) }
+            return
+        }
+
+        pendingImportItems = newItems
+        pendingDuplicateCount = duplicateCount
+        showImportPreview = true
     }
 
     private func handlePhotosImport(_ items: [PhotosPickerItem]) async {
@@ -292,7 +348,7 @@ struct LibraryView: View {
     private func defaultExportFilename() -> String {
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd-HHmm"
-        return "CumbiaMoves-Library-\(df.string(from: Date()))"
+        return "Five67-Library-\(df.string(from: Date()))"
     }
 }
 

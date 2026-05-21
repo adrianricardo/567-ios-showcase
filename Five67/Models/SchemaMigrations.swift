@@ -89,7 +89,7 @@ enum SchemaV2: VersionedSchema {
 
 // MARK: - Migration plan
 
-enum CumbiaMovesMigrationPlan: SchemaMigrationPlan {
+enum Five67MigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
         [SchemaV1.self, SchemaV2.self]
     }
