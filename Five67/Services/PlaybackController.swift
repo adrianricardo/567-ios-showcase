@@ -29,7 +29,7 @@ import OSLog
     private var assetPreflightTask: Task<Void, Never>?
     private var readinessTimeoutTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
-    private let logger = Logger(subsystem: "CumbiaMoves", category: "Playback")
+    private let logger = Logger(subsystem: "Five67", category: "Playback")
 
     init(videoURL: URL? = nil) {
         player = AVPlayer()

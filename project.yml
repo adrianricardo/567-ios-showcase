@@ -1,6 +1,6 @@
-name: CumbiaMoves
+name: Five67
 options:
-  bundleIdPrefix: com.enzo
+  bundleIdPrefix: com.nopal
   deploymentTarget:
     iOS: "18.0"
   createIntermediateGroups: true
@@ -10,35 +10,35 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     TARGETED_DEVICE_FAMILY: "1"
-    PRODUCT_BUNDLE_IDENTIFIER: com.enzo.cumbiamoves
+    PRODUCT_BUNDLE_IDENTIFIER: com.nopal.five67
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
     ENABLE_USER_SCRIPT_SANDBOXING: "NO"
 
 targets:
-  CumbiaMoves:
+  Five67:
     type: application
     platform: iOS
     deploymentTarget: "18.0"
     sources:
-      - path: CumbiaMoves
+      - path: Five67
     resources:
-      - path: CumbiaMoves/Resources/Assets.xcassets
-      - path: CumbiaMoves/Resources/PrivacyInfo.xcprivacy
+      - path: Five67/Resources/Assets.xcassets
+      - path: Five67/Resources/PrivacyInfo.xcprivacy
     info:
-      path: CumbiaMoves/Resources/Info.plist
+      path: Five67/Resources/Info.plist
       properties:
-        CFBundleName: Cumbia Moves
-        CFBundleDisplayName: Cumbia Moves
+        CFBundleName: Five67
+        CFBundleDisplayName: Five67
         UILaunchScreen:
           UIColorName: ""
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UIRequiresFullScreen: false
-        NSPhotoLibraryUsageDescription: "Cumbia Moves needs access to your library to import practice videos."
+        NSPhotoLibraryUsageDescription: "Five67 needs access to your library to import practice videos."
         NSSupportsLiveActivities: false
     settings:
       base:
-        INFOPLIST_FILE: CumbiaMoves/Resources/Info.plist
+        INFOPLIST_FILE: Five67/Resources/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor

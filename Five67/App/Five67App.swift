@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 @main
-struct CumbiaMovesApp: App {
+struct Five67App: App {
     @State private var loadResult: Result<ModelContainer, Error>
     @State private var playbackSession = PlaybackSession()
     @State private var router = AppRouter()
@@ -34,7 +34,7 @@ struct CumbiaMovesApp: App {
         do {
             let container = try ModelContainer(
                 for: schema,
-                migrationPlan: CumbiaMovesMigrationPlan.self,
+                migrationPlan: Five67MigrationPlan.self,
                 configurations: config
             )
             return .success(container)

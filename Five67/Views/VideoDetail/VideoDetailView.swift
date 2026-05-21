@@ -10,14 +10,10 @@ struct VideoDetailView: View {
     @State private var showRename = false
     @State private var showDeleteConfirm = false
 
-    @AppStorage("coach.splitTipSeen") private var splitTipSeen = false
-    @AppStorage("coach.dragTipSeen") private var dragTipSeen = false
-    @AppStorage("coach.nameTipSeen") private var nameTipSeen = false
-
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(AppRouter.self) private var router
-    private let logger = Logger(subsystem: "CumbiaMoves", category: "VideoDetail")
+    private let logger = Logger(subsystem: "Five67", category: "VideoDetail")
 
     init(video: Video) {
         self.video = video
@@ -30,13 +26,6 @@ struct VideoDetailView: View {
         return sortedMoves.first { $0.id == id }
     }
 
-    private var firstUnnamedMove: Move? {
-        sortedMoves.first { $0.name.isEmpty }
-    }
-
-    private var showSplitTip: Bool { !splitTipSeen }
-    private var showDragTip: Bool { splitTipSeen && !dragTipSeen && sortedMoves.count >= 2 }
-    private var showNameTip: Bool { dragTipSeen && !nameTipSeen && firstUnnamedMove != nil }
     private var hasMoves: Bool { !sortedMoves.isEmpty }
 
     var body: some View {
@@ -99,24 +88,13 @@ struct VideoDetailView: View {
                 video: video,
                 moves: sortedMoves,
                 allowsMarkerEditing: true,
-                showsPlaceholderWhenEmpty: true,
-                onHandleDragComplete: { dragTipSeen = true }
+                showsPlaceholderWhenEmpty: true
             ) {
                 VStack(spacing: 14) {
                     MuteRailButton()
                     LoopRailButton(controller: controller)
                     SplitRailButton(controller: controller, onSplit: split)
                 }
-                .overlay(alignment: .leading) {
-                    if showSplitTip {
-                        CoachTip(text: "Tap to split this video into moves", arrow: .right)
-                            .fixedSize()
-                            .offset(x: -10)
-                            .alignmentGuide(.leading) { d in d[.trailing] }
-                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                    }
-                }
-                .animation(.easeInOut(duration: 0.2), value: showSplitTip)
             }
         }
     }
@@ -180,15 +158,6 @@ struct VideoDetailView: View {
     @ViewBuilder
     private var contentList: some View {
         List {
-            if showDragTip {
-                CoachTip(text: "Tap and hold the divider to adjust the split point", arrow: .up)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 10)
-                    .padding(.bottom, 6)
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets())
-            }
-
             ForEach(sortedMoves) { move in
                 MoveRowView(
                     move: move,
@@ -202,15 +171,6 @@ struct VideoDetailView: View {
                 .id(move.id)
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets())
-
-                if showNameTip, move.id == firstUnnamedMove?.id {
-                    CoachTip(text: "Tap **Add name** to label this clip", arrow: .up)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(.trailing, 16)
-                        .padding(.vertical, 6)
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets())
-                }
             }
         }
         .listStyle(.plain)
@@ -242,7 +202,6 @@ struct VideoDetailView: View {
         }
 
         Haptics.medium()
-        splitTipSeen = true
         refreshSortedMoves()
     }
 
@@ -318,7 +277,6 @@ struct VideoDetailView: View {
     private func renameMove(_ move: Move, to name: String) {
         move.name = name
         move.updatedAt = Date()
-        if !name.isEmpty { nameTipSeen = true }
         Haptics.success()
     }
 

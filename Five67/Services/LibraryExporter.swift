@@ -161,7 +161,7 @@ actor LibraryExporter {
 
         // 4. Stage everything in a temp directory.
         let stageRoot = fm.temporaryDirectory
-            .appendingPathComponent("CumbiaMovesExport-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("Five67Export-\(UUID().uuidString)", isDirectory: true)
         try fm.createDirectory(at: stageRoot, withIntermediateDirectories: true)
 
         let encoder = JSONEncoder()
@@ -184,7 +184,7 @@ actor LibraryExporter {
 
         // 5. Zip via NSFileCoordinator(.forUploading). This is the documented technique
         // for producing a zip representation of a directory; works back to iOS 8.
-        let zipURL = try zipDirectory(at: stageRoot, suggestedName: "CumbiaMoves-Library")
+        let zipURL = try zipDirectory(at: stageRoot, suggestedName: "Five67-Library")
 
         // Clean up the stage dir; the zip lives on its own.
         try? fm.removeItem(at: stageRoot)
