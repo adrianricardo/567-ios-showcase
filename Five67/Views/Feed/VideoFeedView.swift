@@ -309,7 +309,7 @@ struct VideoFeedView: View {
                     .font(.largeTitle.weight(.heavy))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white)
-                Text("Cumbia Moves becomes a full-screen feed: swipe between sources, tap through moments, then open the tray when you want to edit.")
+                Text("Five67 becomes a full-screen feed: swipe between sources, tap through moments, then open the tray when you want to edit.")
                     .font(.body.weight(.medium))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.7))
@@ -733,7 +733,7 @@ private struct FeedActionTray: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(activeMove?.name.isEmpty == false ? activeMove!.name : video?.displayName ?? "Cumbia Moves")
+                    Text(activeMove?.name.isEmpty == false ? activeMove!.name : video?.displayName ?? "Five67")
                         .font(.title2.weight(.heavy))
                         .lineLimit(2)
                     Text("\(moveCount) moments in this source. Keep browsing like a feed, or jump into the editor when something feels worth keeping.")
