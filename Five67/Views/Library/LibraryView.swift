@@ -5,8 +5,10 @@ import PhotosUI
 
 struct LibraryView: View {
     @Environment(\.modelContext) private var modelContext
+    // Ordering shared with VideoFeedView so position N in the feed is row N
+    // here. importedAt is always present (recordedAt is optional for Files
+    // imports), so we sort on it alone.
     @Query(sort: [
-        SortDescriptor(\Video.recordedAt, order: .reverse),
         SortDescriptor(\Video.importedAt, order: .reverse)
     ]) private var videos: [Video]
 
@@ -32,6 +34,7 @@ struct LibraryView: View {
     @State private var lastExportResult: LibraryExportResult?
     @State private var showExporterSheet = false
     @State private var showExportSummary = false
+    @State private var showExportTypeDialog = false
 
     var body: some View {
         NavigationStack {
@@ -64,20 +67,17 @@ struct LibraryView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Menu {
-                        Button {
-                            Task { await runExport() }
-                        } label: {
-                            Label("Export Library…", systemImage: "square.and.arrow.up")
-                        }
-                        .disabled(isExporting)
+                    Button {
+                        showExportTypeDialog = true
                     } label: {
                         if isExporting {
                             ProgressView().controlSize(.small)
                         } else {
-                            Image(systemName: "ellipsis.circle")
+                            Image(systemName: "square.and.arrow.up")
                         }
                     }
+                    .disabled(isExporting)
+                    .accessibilityLabel("Export Library")
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
@@ -181,6 +181,42 @@ struct LibraryView: View {
             }
             Button("Cancel", role: .cancel) {}
         }
+        .confirmationDialog(
+            "Export Library",
+            isPresented: $showExportTypeDialog,
+            titleVisibility: .visible
+        ) {
+            Button("Full Export (Videos + Metadata)") {
+                Task { await runExport(includeVideos: true) }
+            }
+            Button("Metadata Only (No Videos)") {
+                Task { await runExport(includeVideos: false) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Full exports include all video files and can be large. Metadata-only exports are quick and contain just your moves and library structure.")
+        }
+        .overlay {
+            if isExporting && !showExporterSheet {
+                ZStack {
+                    Color.black.opacity(0.25).ignoresSafeArea()
+                    VStack(spacing: 12) {
+                        ProgressView().controlSize(.large)
+                        Text("Preparing export…")
+                            .font(.headline)
+                        Text("This may take a moment for large libraries.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(24)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .padding(40)
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: isExporting)
     }
 
     private var emptyState: some View {
@@ -328,15 +364,22 @@ struct LibraryView: View {
     // MARK: - Export
 
     @MainActor
-    private func runExport() async {
+    private func runExport(includeVideos: Bool) async {
         guard !isExporting else { return }
         isExporting = true
         defer { isExporting = false }
 
+        // Let SwiftUI flush a frame so the "Preparing export…" overlay appears
+        // before the (potentially blocking) modelContext.save() runs.
+        await Task.yield()
+
         do {
             try modelContext.save()  // flush pending edits so the export is consistent
-            let exporter = LibraryExporter(modelContainer: modelContext.container)
-            let result = try await exporter.export()
+            let container = modelContext.container
+            let result = try await Task.detached(priority: .userInitiated) {
+                let exporter = LibraryExporter(modelContainer: container)
+                return try await exporter.export(includeVideos: includeVideos)
+            }.value
             pendingExportResult = result
             exportDocument = LibraryExportDocument(zipURL: result.zipURL)
             showExporterSheet = true
@@ -348,7 +391,8 @@ struct LibraryView: View {
     private func defaultExportFilename() -> String {
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd-HHmm"
-        return "Five67-Library-\(df.string(from: Date()))"
+        let stem = (pendingExportResult?.includesVideoFiles ?? true) ? "Library" : "Metadata"
+        return "Five67-\(stem)-\(df.string(from: Date()))"
     }
 }
 

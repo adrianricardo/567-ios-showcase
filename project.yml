@@ -37,8 +37,26 @@ targets:
         UIRequiresFullScreen: false
         NSPhotoLibraryUsageDescription: "Five67 needs access to your library to import practice videos."
         NSSupportsLiveActivities: false
+        ITSAppUsesNonExemptEncryption: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
     settings:
       base:
         INFOPLIST_FILE: Five67/Resources/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        DEVELOPMENT_TEAM: "[redacted-team]"
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
+    postBuildScripts:
+      - name: Set CFBundleVersion from git commit count
+        script: |
+          set -e
+          buildNumber=$(cd "$PROJECT_DIR" && git rev-list --count HEAD 2>/dev/null || echo "1")
+          infoPlist="${TARGET_BUILD_DIR}/${INFOPLIST_PATH}"
+          if [ -f "$infoPlist" ]; then
+            /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $buildNumber" "$infoPlist"
+            echo "CFBundleVersion set to $buildNumber"
+          fi
+        basedOnDependencyAnalysis: false

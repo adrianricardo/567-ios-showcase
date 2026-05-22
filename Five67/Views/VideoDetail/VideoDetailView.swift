@@ -4,19 +4,22 @@ import OSLog
 
 struct VideoDetailView: View {
     let video: Video
+    let startTime: TimeInterval?
     @State private var controller: PlaybackController
     @State private var activeMoveID: UUID?
     @State private var sortedMoves: [Move] = []
     @State private var showRename = false
     @State private var showDeleteConfirm = false
+    @State private var didApplyStartTime = false
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(AppRouter.self) private var router
     private let logger = Logger(subsystem: "Five67", category: "VideoDetail")
 
-    init(video: Video) {
+    init(video: Video, startTime: TimeInterval? = nil) {
         self.video = video
+        self.startTime = startTime
         self._controller = State(wrappedValue: PlaybackController(videoURL: video.fileURL))
         self._sortedMoves = State(wrappedValue: video.movesSorted)
     }
@@ -50,6 +53,13 @@ struct VideoDetailView: View {
                 }
                 .onAppear {
                     refreshSortedMoves()
+                    // Land the editor where the feed left off, when handed a
+                    // start time. Guarded so we only honor it on the first
+                    // appearance (re-appearances after dismiss don't re-seek).
+                    if !didApplyStartTime, let t = startTime, t.isFinite, t > 0 {
+                        controller.seek(to: t)
+                    }
+                    didApplyStartTime = true
                     controller.play()
                 }
                 .navigationBarBackButtonHidden(true)

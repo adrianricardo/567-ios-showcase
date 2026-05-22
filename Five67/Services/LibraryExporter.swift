@@ -9,6 +9,7 @@ struct LibraryExportResult: Sendable {
     let zipURL: URL
     let videoCount: Int
     let moveCount: Int
+    let includesVideoFiles: Bool
     let missingFiles: [String]
     let orphanFiles: [String]
     let orphanMoveCount: Int
@@ -75,6 +76,7 @@ struct ExportManifest: Codable {
     let schemaVersion: String
     let videoCount: Int
     let moveCount: Int
+    let includesVideoFiles: Bool
     let integrity: IntegrityReport
 }
 
@@ -83,7 +85,7 @@ struct ExportManifest: Codable {
 @ModelActor
 actor LibraryExporter {
 
-    func export() async throws -> LibraryExportResult {
+    func export(includeVideos: Bool = true) async throws -> LibraryExportResult {
         let videos = try modelContext.fetch(FetchDescriptor<Video>())
         let moves = try modelContext.fetch(FetchDescriptor<Move>())
 
@@ -156,6 +158,7 @@ actor LibraryExporter {
             schemaVersion: "2.0.0",
             videoCount: videoDTOs.count,
             moveCount: moveDTOs.count,
+            includesVideoFiles: includeVideos,
             integrity: integrity
         )
 
@@ -173,18 +176,21 @@ actor LibraryExporter {
         try encoder.encode(manifest).write(to: stageRoot.appendingPathComponent("manifest.json"))
 
         // Copy videos (only the ones that actually exist on disk).
-        let videosStageDir = stageRoot.appendingPathComponent("videos", isDirectory: true)
-        try fm.createDirectory(at: videosStageDir, withIntermediateDirectories: true)
-        for dto in videoDTOs {
-            let src = videosDir.appendingPathComponent(dto.localFilename)
-            guard fm.fileExists(atPath: src.path) else { continue }
-            let dst = videosStageDir.appendingPathComponent(dto.localFilename)
-            try fm.copyItem(at: src, to: dst)
+        if includeVideos {
+            let videosStageDir = stageRoot.appendingPathComponent("videos", isDirectory: true)
+            try fm.createDirectory(at: videosStageDir, withIntermediateDirectories: true)
+            for dto in videoDTOs {
+                let src = videosDir.appendingPathComponent(dto.localFilename)
+                guard fm.fileExists(atPath: src.path) else { continue }
+                let dst = videosStageDir.appendingPathComponent(dto.localFilename)
+                try fm.copyItem(at: src, to: dst)
+            }
         }
 
         // 5. Zip via NSFileCoordinator(.forUploading). This is the documented technique
         // for producing a zip representation of a directory; works back to iOS 8.
-        let zipURL = try zipDirectory(at: stageRoot, suggestedName: "Five67-Library")
+        let archiveName = includeVideos ? "Five67-Library" : "Five67-Metadata"
+        let zipURL = try zipDirectory(at: stageRoot, suggestedName: archiveName)
 
         // Clean up the stage dir; the zip lives on its own.
         try? fm.removeItem(at: stageRoot)
@@ -193,6 +199,7 @@ actor LibraryExporter {
             zipURL: zipURL,
             videoCount: videoDTOs.count,
             moveCount: moveDTOs.count,
+            includesVideoFiles: includeVideos,
             missingFiles: missingFiles,
             orphanFiles: orphanFiles,
             orphanMoveCount: orphanMoveCount,
