@@ -5,21 +5,32 @@ import OSLog
 struct VideoDetailView: View {
     let video: Video
     let startTime: TimeInterval?
+    let onFinish: ((TimeInterval?) -> Void)?
     @State private var controller: PlaybackController
     @State private var activeMoveID: UUID?
     @State private var sortedMoves: [Move] = []
     @State private var showRename = false
     @State private var showDeleteConfirm = false
     @State private var didApplyStartTime = false
+    // Start time of the most recently marked move during this editor session.
+    // Reported back to the caller on Done so the feed can re-open on the new
+    // move's first frame. Nil means the user didn't mark anything → caller
+    // should keep its existing restore behavior.
+    @State private var lastMarkedTime: TimeInterval?
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(AppRouter.self) private var router
     private let logger = Logger(subsystem: "Five67", category: "VideoDetail")
 
-    init(video: Video, startTime: TimeInterval? = nil) {
+    init(
+        video: Video,
+        startTime: TimeInterval? = nil,
+        onFinish: ((TimeInterval?) -> Void)? = nil
+    ) {
         self.video = video
         self.startTime = startTime
+        self.onFinish = onFinish
         self._controller = State(wrappedValue: PlaybackController(videoURL: video.fileURL))
         self._sortedMoves = State(wrappedValue: video.movesSorted)
     }
@@ -127,6 +138,8 @@ struct VideoDetailView: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
 
+            videoMenu
+
             if hasMoves {
                 Button {
                     finishEditing()
@@ -138,31 +151,46 @@ struct VideoDetailView: View {
                         .frame(height: 44)
                 }
                 .accessibilityLabel("Done editing")
-            } else {
-                Menu {
-                    Button {
-                        showRename = true
-                    } label: {
-                        Label("Rename Video", systemImage: "pencil")
-                    }
-                    Divider()
-                    Button(role: .destructive) {
-                        showDeleteConfirm = true
-                    } label: {
-                        Label("Delete Video", systemImage: "trash")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.title3)
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                }
-                .accessibilityLabel("More")
             }
         }
         .padding(.horizontal, 8)
         .frame(height: 44)
         .background(Color.black)
+    }
+
+    private var videoMenu: some View {
+        Menu {
+            Picker("Style", selection: styleBinding) {
+                Text("Untagged").tag(DanceStyle?.none)
+                ForEach(DanceStyle.allCases) { style in
+                    Text(style.label).tag(DanceStyle?.some(style))
+                }
+            }
+            Button {
+                showRename = true
+            } label: {
+                Label("Rename Video", systemImage: "pencil")
+            }
+            Divider()
+            Button(role: .destructive) {
+                showDeleteConfirm = true
+            } label: {
+                Label("Delete Video", systemImage: "trash")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.title3)
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+        }
+        .accessibilityLabel("More")
+    }
+
+    private var styleBinding: Binding<DanceStyle?> {
+        Binding(
+            get: { video.style },
+            set: { video.style = $0 }
+        )
     }
 
     @ViewBuilder
@@ -211,6 +239,10 @@ struct VideoDetailView: View {
             segment.endTime = t
         }
 
+        // Remember the split point. Both branches above create a move whose
+        // start time is `t`, so this is the new move's first frame.
+        lastMarkedTime = t
+
         Haptics.medium()
         refreshSortedMoves()
     }
@@ -228,6 +260,9 @@ struct VideoDetailView: View {
         controller.pause()
         Haptics.success()
         router.selectedTab = .moves
+        // Report the most recently marked move's start time (if any) so a
+        // feed presenter can re-open on that move's first frame.
+        onFinish?(lastMarkedTime)
         dismiss()
     }
 

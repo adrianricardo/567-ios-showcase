@@ -6,20 +6,20 @@ import UIKit
 
 struct VideoFeedView: View {
     @Environment(\.modelContext) private var modelContext
-    // Order shared with LibraryView so the feed's "n / total" position matches
-    // the library list. importedAt is always present (recordedAt can be nil for
+    @Environment(PlaybackSession.self) private var session
+    @Environment(StyleStore.self) private var styleStore
+    // Order shared with the Library pane so the feed's "n / total" position
+    // matches the list. importedAt is always present (recordedAt can be nil for
     // Files imports) and keeps a fresh import at index 0 so we can land on it.
     @Query(sort: [
         SortDescriptor(\Video.importedAt, order: .reverse)
-    ]) private var videos: [Video]
+    ]) private var allVideos: [Video]
 
     @State private var controllers: [UUID: PlaybackController] = [:]
     @State private var activeVideoID: UUID?
     @State private var selectedIndex = 0
     @State private var activeMoveID: UUID?
     @State private var dragOffset: CGFloat = 0
-    @State private var showActionTray = false
-    @State private var showLibrary = false
     @State private var showDetail = false
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var showPhotosPicker = false
@@ -28,6 +28,25 @@ struct VideoFeedView: View {
     @State private var importError: String?
     @State private var showError = false
     @State private var editorStartTime: TimeInterval?
+
+    // Library pane: a side surface co-equal to the feed. `paneProgress` is the
+    // open fraction (0 closed → 1 fully open); the feed parallaxes off to the
+    // right as the pane slides in from the left.
+    @State private var paneProgress: CGFloat = 0
+    @State private var dragAxis: FeedDragAxis?
+    @State private var pendingFeedMove: PendingFeedMove?
+
+    // Import-time style tagging. After videos import we prompt to tag them so
+    // the global style mode can scope them.
+    @State private var styleTagTargets: [Video] = []
+    @State private var showStyleTagPrompt = false
+
+    // Videos scoped to the active style mode. The feed and pane share this lens.
+    private var videos: [Video] {
+        allVideos.filter { styleStore.matches($0) }
+    }
+
+    private var isPaneOpen: Bool { paneProgress > 0.5 }
 
     // Two-beat coach. Beat 1 teaches the non-obvious axis (swipe = different
     // video). Beat 2 teaches the move tap-zones (left/right thirds of the
@@ -69,7 +88,7 @@ struct VideoFeedView: View {
     /// for attention.
     private var coachActive: Bool { showSwipeCoach || showTapCoach }
 
-    var body: some View {
+    private var feedRoot: some View {
         NavigationStack {
             ZStack {
                 Color.black.ignoresSafeArea()
@@ -79,6 +98,9 @@ struct VideoFeedView: View {
                 } else {
                     emptyState
                         .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                    emptyStateTopBar
+                        .opacity(coachActive ? 0 : 1)
+                        .allowsHitTesting(!coachActive)
                 }
 
                 if showSwipeCoach {
@@ -93,9 +115,45 @@ struct VideoFeedView: View {
             .toolbar(.hidden, for: .tabBar)
             .navigationDestination(isPresented: $showDetail) {
                 if let selectedVideo {
-                    VideoDetailView(video: selectedVideo, startTime: editorStartTime)
+                    VideoDetailView(
+                        video: selectedVideo,
+                        startTime: editorStartTime,
+                        onFinish: { newMarkedTime in
+                            // If the user marked a new move in the editor,
+                            // restore the feed on that move's first frame.
+                            // Nil → keep the original handoff timestamp.
+                            if let t = newMarkedTime {
+                                editorStartTime = t
+                            }
+                        }
+                    )
                 }
             }
+        }
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                feedRoot
+                    .offset(x: paneProgress * geo.size.width)
+                    .allowsHitTesting(paneProgress == 0)
+
+                LibraryPaneView(
+                    activeVideoID: activeVideoID,
+                    activeMoveID: activeMoveID,
+                    onSelectVideo: { openFromPane(video: $0, move: nil) },
+                    onSelectMove: { selectMoveFromPane($0) },
+                    onImportPhotos: { showPhotosPicker = true },
+                    onImportFiles: { showFilesImporter = true },
+                    onClose: { settlePane(open: false) }
+                )
+                .frame(width: geo.size.width, height: geo.size.height)
+                .offset(x: (paneProgress - 1) * geo.size.width)
+                .allowsHitTesting(paneProgress >= 1)
+                .shadow(color: .black.opacity(0.25 * paneProgress), radius: 18, x: 6)
+            }
+            .gesture(feedAndPaneGesture(size: geo.size))
         }
         .photosPicker(
             isPresented: $showPhotosPicker,
@@ -131,61 +189,43 @@ struct VideoFeedView: View {
         } message: {
             Text(importError ?? "An unknown error occurred.")
         }
-        .sheet(isPresented: $showLibrary) {
-            LibraryView()
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showActionTray) {
-            FeedActionTray(
-                video: selectedVideo,
-                activeMove: activeMove,
-                moveCount: activeMoves.count,
-                onOpenEditor: {
-                    showActionTray = false
-                    guard selectedVideo != nil else { return }
-                    // Hand the feed's current playback time to the editor so it
-                    // opens where the user was looking, and pause the feed's
-                    // player so the two surfaces don't play over each other.
-                    editorStartTime = activeController?.currentTime
-                    activeController?.pause()
-                    showDetail = true
-                },
-                onImportPhotos: {
-                    showActionTray = false
-                    showPhotosPicker = true
-                },
-                onImportFiles: {
-                    showActionTray = false
-                    showFilesImporter = true
-                },
-                onResetCoach: {
-                    showActionTray = false
-                    // Flip the flags directly from the app, then re-trigger.
-                    // Bypasses cfprefsd because the app writes its own defaults.
-                    hasSeenFeedSwipeCoach = false
-                    hasSeenFeedTapCoach = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        maybeAdvanceCoach()
-                    }
-                }
-            )
-            .presentationDetents([.height(330), .medium])
-            .presentationDragIndicator(.visible)
+        .confirmationDialog(
+            styleTagTargets.count > 1 ? "Tag \(styleTagTargets.count) videos" : "What style is this?",
+            isPresented: $showStyleTagPrompt,
+            titleVisibility: .visible
+        ) {
+            ForEach(DanceStyle.allCases) { style in
+                Button(style.label) { applyStyleToTargets(style) }
+            }
+            Button("Skip", role: .cancel) { styleTagTargets = [] }
+        } message: {
+            Text("Tagging keeps videos in the right style mode. You can change it later from the editor.")
         }
         .onAppear {
             syncWindow(autoplay: true)
             maybeAdvanceCoach()
         }
         .onChange(of: selectedIndex) { _, _ in syncWindow(autoplay: true) }
+        .onChange(of: styleStore.activeStyle) { _, _ in
+            // The active lens changed: re-anchor to the top of the new list and
+            // rebuild the playback window so we never point at a filtered-out video.
+            selectedIndex = 0
+            syncWindow(autoplay: !isPaneOpen)
+        }
         .onChange(of: videos.count) { _, _ in
             normalizeSelectionAfterDataChange()
             maybeAdvanceCoach()
         }
         .onChange(of: activeController?.currentTime) { _, time in updateActiveMove(for: time ?? 0) }
         .onChange(of: showDetail) { _, presenting in
-            // Returning from the editor: resume the feed where it left off.
+            // Returning from the editor: resume on the right frame. If the
+            // editor reported a newly marked move, `editorStartTime` was
+            // overwritten to that move's start; otherwise it's still the
+            // handoff-in timestamp. Either way, seek there and play.
             if !presenting {
+                if let t = editorStartTime, t.isFinite, t >= 0 {
+                    activeController?.seek(to: t)
+                }
                 editorStartTime = nil
                 activeController?.play()
             }
@@ -213,6 +253,14 @@ struct VideoFeedView: View {
                 .animation(.easeInOut(duration: 0.25), value: coachActive)
                 .allowsHitTesting(!coachActive)
 
+                rightRail
+                    .padding(.trailing, 14)
+                    .padding(.bottom, max(180, geo.safeAreaInsets.bottom + 160))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .opacity(coachActive ? 0 : chromeOpacity(height: geo.size.height))
+                    .animation(.easeInOut(duration: 0.25), value: coachActive)
+                    .allowsHitTesting(!coachActive)
+
                 VStack {
                     Spacer(minLength: 0)
                     VideoPeekIndicator(
@@ -227,7 +275,21 @@ struct VideoFeedView: View {
                 .animation(.easeInOut(duration: 0.25), value: coachActive)
             }
             .contentShape(Rectangle())
-            .gesture(verticalSwipeGesture(height: geo.size.height))
+        }
+    }
+
+    @ViewBuilder
+    private var rightRail: some View {
+        if let controller = activeController {
+            VStack(spacing: 16) {
+                LoopRailButton(controller: controller)
+                Button {
+                    openEditor()
+                } label: {
+                    RailIcon(systemName: "slider.horizontal.3")
+                }
+                .accessibilityLabel("Edit moves")
+            }
         }
     }
 
@@ -297,15 +359,6 @@ struct VideoFeedView: View {
                     dismissTapCoach()
                 }
         }
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.22).onEnded { _ in
-                activeController?.pause()
-                Haptics.light()
-                withAnimation(.snappy(duration: 0.32, extraBounce: 0.02)) {
-                    showActionTray = true
-                }
-            }
-        )
     }
 
     @ViewBuilder
@@ -320,17 +373,18 @@ struct VideoFeedView: View {
                     .allowsHitTesting(false)
 
                 Button {
-                    controller.isMuted.toggle()
+                    session.isMuted.toggle()
+                    controller.isMuted = session.isMuted
                     Haptics.light()
                 } label: {
-                    Image(systemName: controller.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                    Image(systemName: session.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                         .font(.system(size: 10, weight: .bold))
                         .contentTransition(.identity)
                         .foregroundStyle(.white)
                         .frame(width: 26, height: 26)
                         .background(.black.opacity(0.45), in: Circle())
                 }
-                .accessibilityLabel(controller.isMuted ? "Unmute" : "Mute")
+                .accessibilityLabel(session.isMuted ? "Unmute" : "Mute")
                 .offset(y: -(24 + 14 + 13))
             }
             .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
@@ -349,31 +403,86 @@ struct VideoFeedView: View {
             )
 
             HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(video.displayName)
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .shadow(color: .black.opacity(0.45), radius: 10, y: 4)
-                }
+                libraryButton
+
+                Text(video.displayName)
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .shadow(color: .black.opacity(0.45), radius: 10, y: 4)
 
                 Spacer(minLength: 0)
 
-                Button {
-                    Haptics.light()
-                    showLibrary = true
-                } label: {
-                    Label("Library", systemImage: "square.grid.2x2.fill")
-                        .labelStyle(.iconOnly)
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                        .background(.ultraThinMaterial, in: Circle())
-                        .overlay(Circle().stroke(.white.opacity(0.16)))
-                }
-                .accessibilityLabel("Open library")
+                feedStyleChip
             }
         }
+    }
+
+    private var libraryButton: some View {
+        Button {
+            Haptics.light()
+            openPane()
+        } label: {
+            Label("Library", systemImage: "square.grid.2x2.fill")
+                .labelStyle(.iconOnly)
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay(Circle().stroke(.white.opacity(0.16)))
+        }
+        .accessibilityLabel("Open library")
+    }
+
+    // Top controls shown over the empty state so the Library button and—
+    // critically—the Style chip never disappear. Without this, a style filter
+    // that matches no videos would strand the user with no way to switch back.
+    private var emptyStateTopBar: some View {
+        VStack {
+            HStack(spacing: 12) {
+                libraryButton
+                Spacer(minLength: 0)
+                feedStyleChip
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 12)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var feedStyleChip: some View {
+        Menu {
+            Picker("Style", selection: styleBinding) {
+                Text("All").tag(DanceStyle?.none)
+                ForEach(DanceStyle.allCases) { style in
+                    Text(style.label).tag(DanceStyle?.some(style))
+                }
+            }
+            #if DEBUG
+            Divider()
+            Button("Reset coach", systemImage: "arrow.counterclockwise") { resetCoach() }
+            #endif
+        } label: {
+            HStack(spacing: 4) {
+                Text(styleStore.label)
+                    .font(.subheadline.weight(.bold))
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.bold))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14)
+            .frame(height: 44)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay(Capsule().stroke(.white.opacity(0.16)))
+        }
+        .accessibilityLabel("Style: \(styleStore.label)")
+    }
+
+    private var styleBinding: Binding<DanceStyle?> {
+        Binding(
+            get: { styleStore.activeStyle },
+            set: { styleStore.activeStyle = $0 }
+        )
     }
 
     private func bottomChrome(video: Video) -> some View {
@@ -384,27 +493,6 @@ struct VideoFeedView: View {
             } else {
                 DiscoveryHintCard(duration: effectiveDuration(for: video), moveCount: activeMoves.count)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
-            // Prev/Next removed: the segment rail and edge taps already move
-            // between moves. The bottom row carries only the unique action.
-            Button {
-                Haptics.medium()
-                showActionTray = true
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "sparkles")
-                    Text("Open actions")
-                }
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(.black)
-                .frame(maxWidth: .infinity)
-                .frame(height: 50)
-                .background(
-                    LinearGradient(colors: [Color.white, Color(red: 0.76, green: 0.92, blue: 1.0)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                    in: Capsule()
-                )
-                .shadow(color: .cyan.opacity(0.28), radius: 20, y: 8)
             }
         }
         .animation(.snappy(duration: 0.28, extraBounce: 0.03), value: activeMoveID)
@@ -430,7 +518,7 @@ struct VideoFeedView: View {
                     .font(.largeTitle.weight(.heavy))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white)
-                Text("Five67 becomes a full-screen feed: swipe between videos, tap through moves, then open the tray when you want to edit.")
+                Text("Five67 becomes a full-screen feed: swipe between videos, tap through moves, and swipe right for your library.")
                     .font(.body.weight(.medium))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.7))
@@ -611,25 +699,135 @@ struct VideoFeedView: View {
         withAnimation(.easeInOut(duration: 0.25)) { showTapCoach = false }
     }
 
-    private func verticalSwipeGesture(height: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 18)
+    // One gesture drives both axes. We lock the axis on the first significant
+    // movement: vertical scrubs between videos (feed), horizontal opens/closes
+    // the Library pane. Locking avoids the two competing for the same drag.
+    private func feedAndPaneGesture(size: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 14)
             .onChanged { value in
-                guard abs(value.translation.height) > abs(value.translation.width) else { return }
-                dragOffset = value.translation.height
-                startNeighborPlayback()
-            }
-            .onEnded { value in
-                let threshold = min(170, height * 0.18)
-                let projected = value.predictedEndTranslation.height
-                if projected < -threshold {
-                    moveToNextSource()
-                } else if projected > threshold {
-                    moveToPreviousSource()
-                } else {
-                    pauseNeighbors()
-                    withAnimation(.snappy(duration: 0.28, extraBounce: 0.05)) { dragOffset = 0 }
+                if dragAxis == nil {
+                    dragAxis = abs(value.translation.width) >= abs(value.translation.height)
+                        ? .horizontal : .vertical
+                    // Pause the underlying feed the moment a pane swipe begins.
+                    if dragAxis == .horizontal, !isPaneOpen {
+                        activeController?.pause()
+                    }
+                }
+                switch dragAxis {
+                case .horizontal:
+                    let base: CGFloat = isPaneOpen ? 1 : 0
+                    let delta = value.translation.width / max(size.width, 1)
+                    paneProgress = min(1, max(0, base + delta))
+                case .vertical:
+                    guard !isPaneOpen else { return }
+                    dragOffset = value.translation.height
+                    startNeighborPlayback()
+                case .none:
+                    break
                 }
             }
+            .onEnded { value in
+                switch dragAxis {
+                case .horizontal:
+                    let base: CGFloat = isPaneOpen ? 1 : 0
+                    let predicted = base + value.predictedEndTranslation.width / max(size.width, 1)
+                    settlePane(open: predicted > 0.5)
+                case .vertical:
+                    if !isPaneOpen { endVerticalSwipe(value: value, height: size.height) }
+                case .none:
+                    break
+                }
+                dragAxis = nil
+            }
+    }
+
+    private func endVerticalSwipe(value: DragGesture.Value, height: CGFloat) {
+        let threshold = min(170, height * 0.18)
+        let projected = value.predictedEndTranslation.height
+        if projected < -threshold {
+            moveToNextSource()
+        } else if projected > threshold {
+            moveToPreviousSource()
+        } else {
+            pauseNeighbors()
+            withAnimation(.snappy(duration: 0.28, extraBounce: 0.05)) { dragOffset = 0 }
+        }
+    }
+
+    // MARK: - Library pane
+
+    private func openPane() {
+        settlePane(open: true)
+    }
+
+    private func settlePane(open: Bool) {
+        withAnimation(.snappy(duration: 0.34, extraBounce: 0.02)) {
+            paneProgress = open ? 1 : 0
+        }
+        if open {
+            activeController?.pause()
+        } else {
+            resumeFeedAfterPane()
+        }
+        Haptics.light()
+    }
+
+    private func resumeFeedAfterPane() {
+        guard let controller = activeController else { return }
+        if let pending = pendingFeedMove, pending.videoID == activeVideoID {
+            activeMoveID = pending.moveID
+            controller.playRange(start: pending.time, end: pending.endTime)
+            pendingFeedMove = nil
+        } else {
+            controller.play()
+        }
+    }
+
+    private func selectMoveFromPane(_ move: Move) {
+        guard let video = move.video else { return }
+        openFromPane(video: video, move: move)
+    }
+
+    /// Hands a pane selection back to the feed: parallax the pane closed and
+    /// land the feed on the chosen video (and move, if any).
+    private func openFromPane(video: Video, move: Move?) {
+        guard let idx = videos.firstIndex(where: { $0.id == video.id }) else { return }
+        pendingFeedMove = move.map {
+            PendingFeedMove(videoID: video.id, moveID: $0.id, time: $0.time, endTime: $0.endTime)
+        }
+        if idx == selectedIndex {
+            withAnimation(.snappy(duration: 0.34, extraBounce: 0.02)) { paneProgress = 0 }
+            resumeFeedAfterPane()
+        } else {
+            withAnimation(.snappy(duration: 0.34, extraBounce: 0.02)) { paneProgress = 0 }
+            // Index change drives syncWindow → activate, which applies the
+            // pending move once the new video is current.
+            selectedIndex = idx
+        }
+        Haptics.light()
+    }
+
+    private func openEditor() {
+        guard selectedVideo != nil else { return }
+        // Hand the feed's current playback time to the editor so it opens where
+        // the user was looking, and pause the feed's player.
+        editorStartTime = activeController?.currentTime
+        activeController?.pause()
+        showDetail = true
+    }
+
+    private func applyStyleToTargets(_ style: DanceStyle) {
+        for video in styleTagTargets { video.style = style }
+        styleTagTargets = []
+        Haptics.success()
+    }
+
+    private func resetCoach() {
+        hasSeenFeedSwipeCoach = false
+        hasSeenFeedTapCoach = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            maybeAdvanceCoach()
+        }
     }
 
     private func moveToNextSource() {
@@ -711,15 +909,30 @@ struct VideoFeedView: View {
     private func activate(_ controller: PlaybackController, video: Video, autoplay: Bool) {
         let isNewActive = activeVideoID != video.id
         activeVideoID = video.id
-        controller.isMuted = false
+        // Honor the app-wide mute preference; switching to a new video must not
+        // reset it. `PlaybackSession` is persisted, so this also survives cold
+        // launch — a muted user stays muted across sessions.
+        controller.isMuted = session.isMuted
         if isNewActive {
             activeMoveID = nil
             if let first = video.movesSorted.first {
                 activeMoveID = first.id
                 controller.setActiveRange(start: first.time, end: first.endTime)
+            } else {
+                // No moves: the loop button should loop the whole video, so
+                // scope the active range to the full duration.
+                controller.setActiveRange(start: 0, end: effectiveDuration(for: video))
             }
         }
         if autoplay { controller.play() }
+
+        // A pane selection targeting this video overrides the default first-move
+        // landing: jump to the chosen move and play from there.
+        if let pending = pendingFeedMove, pending.videoID == video.id {
+            activeMoveID = pending.moveID
+            controller.playRange(start: pending.time, end: pending.endTime)
+            pendingFeedMove = nil
+        }
     }
 
     private func teardownControllers(keeping keep: Set<UUID>) {
@@ -805,26 +1018,21 @@ struct VideoFeedView: View {
         defer { isImporting = false }
 
         var firstError: String?
-        var successCount = 0
+        var imported: [Video] = []
         for item in items {
-            let existingSourceIDs = Dictionary(uniqueKeysWithValues: videos.compactMap { v in
+            let existingSourceIDs = Dictionary(uniqueKeysWithValues: allVideos.compactMap { v in
                 v.sourceAssetID.map { ($0, v.id) }
             })
             do {
                 let result = try await VideoImporter.import(from: item, existingSourceIDs: existingSourceIDs)
-                insertVideo(from: result)
-                successCount += 1
+                imported.append(insertVideo(from: result))
             } catch ImportError.alreadyImported {
                 continue
             } catch {
                 if firstError == nil { firstError = error.localizedDescription }
             }
         }
-        if successCount > 0 { Haptics.success() }
-        if let firstError {
-            importError = firstError
-            showError = true
-        }
+        finishImport(imported: imported, firstError: firstError)
     }
 
     private func handleFilesImport(_ urls: [URL]) async {
@@ -832,26 +1040,36 @@ struct VideoFeedView: View {
         defer { isImporting = false }
 
         var firstError: String?
-        var successCount = 0
+        var imported: [Video] = []
         for url in urls {
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
             do {
                 let result = try await VideoImporter.import(fromFileURL: url)
-                insertVideo(from: result)
-                successCount += 1
+                imported.append(insertVideo(from: result))
             } catch {
                 if firstError == nil { firstError = error.localizedDescription }
             }
         }
-        if successCount > 0 { Haptics.success() }
+        finishImport(imported: imported, firstError: firstError)
+    }
+
+    /// Common tail for both import paths: haptics, error surfacing, and the
+    /// style-tag prompt for the freshly imported videos.
+    private func finishImport(imported: [Video], firstError: String?) {
+        if !imported.isEmpty {
+            Haptics.success()
+            styleTagTargets = imported
+            showStyleTagPrompt = true
+        }
         if let firstError {
             importError = firstError
             showError = true
         }
     }
 
-    private func insertVideo(from result: VideoImportResult) {
+    @discardableResult
+    private func insertVideo(from result: VideoImportResult) -> Video {
         let video = Video(
             displayName: result.displayName,
             localFilename: result.filename,
@@ -874,7 +1092,17 @@ struct VideoFeedView: View {
                 duration: duration
             )
         }
+        return video
     }
+}
+
+private enum FeedDragAxis { case horizontal, vertical }
+
+private struct PendingFeedMove {
+    let videoID: UUID
+    let moveID: UUID
+    let time: TimeInterval
+    let endTime: TimeInterval?
 }
 
 private struct FeedSegmentRail: View {
@@ -1026,92 +1254,5 @@ private struct VideoPeekIndicator: View {
         .background(.black.opacity(0.34), in: Capsule())
         .scaleEffect(abs(dragOffset) > 60 ? 1.06 : 1)
         .animation(.snappy(duration: 0.22, extraBounce: 0.04), value: dragOffset)
-    }
-}
-
-private struct FeedPillButton: View {
-    let title: String
-    let systemName: String
-    var compact = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.headline.weight(.bold))
-                .foregroundStyle(.white)
-                .frame(width: compact ? 50 : 120, height: 50)
-                .background(.white.opacity(0.12), in: Capsule())
-                .overlay(Capsule().stroke(.white.opacity(0.14)))
-        }
-        .accessibilityLabel(title)
-    }
-}
-
-private struct FeedActionTray: View {
-    let video: Video?
-    let activeMove: Move?
-    let moveCount: Int
-    let onOpenEditor: () -> Void
-    let onImportPhotos: () -> Void
-    let onImportFiles: () -> Void
-    let onResetCoach: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(activeMove?.name.isEmpty == false ? activeMove!.name : video?.displayName ?? "Five67")
-                        .font(.title2.weight(.heavy))
-                        .lineLimit(2)
-                    Text("\(moveCount) moves in this video. Keep browsing like a feed, or jump into the editor when something feels worth keeping.")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
-
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    TrayActionButton(title: "Edit moves", subtitle: "Timeline + labels", systemName: "slider.horizontal.3", action: onOpenEditor)
-                    TrayActionButton(title: "Photos", subtitle: "Import videos", systemName: "photo.on.rectangle", action: onImportPhotos)
-                    TrayActionButton(title: "Files", subtitle: "Drop footage", systemName: "folder", action: onImportFiles)
-                    #if DEBUG
-                    TrayActionButton(title: "Reset coach", subtitle: "Debug · replay beats", systemName: "arrow.counterclockwise", action: onResetCoach)
-                    #endif
-                }
-
-                Spacer(minLength: 0)
-            }
-            .padding(20)
-            .navigationTitle("Actions")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-}
-
-private struct TrayActionButton: View {
-    let title: String
-    let subtitle: String
-    let systemName: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 10) {
-                Image(systemName: systemName)
-                    .font(.title3.weight(.bold))
-                    .foregroundStyle(.cyan)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(.primary)
-                    Text(subtitle)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        }
-        .buttonStyle(.plain)
     }
 }

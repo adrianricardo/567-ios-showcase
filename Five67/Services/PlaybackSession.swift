@@ -1,12 +1,31 @@
 import Foundation
 import Observation
 
-/// App-lifetime playback preferences. Resets each cold launch.
+/// App-wide playback preferences. Persisted to UserDefaults so a user who
+/// muted last session opens muted next session.
 ///
-/// `isMuted` defaults to `true` on launch so videos start quiet. Once the user
-/// unmutes, the preference carries across video switches and pages — but it is
-/// not persisted to disk, so the next launch starts muted again.
+/// `isMuted` is the single source of truth for audio on/off across every
+/// surface (feed, editor). Initial default is muted so first launch is quiet.
 @MainActor
 @Observable final class PlaybackSession {
-    var isMuted: Bool = true
+    private static let mutedKey = "playbackSession.isMuted"
+
+    var isMuted: Bool {
+        didSet {
+            guard oldValue != isMuted else { return }
+            UserDefaults.standard.set(isMuted, forKey: Self.mutedKey)
+        }
+    }
+
+    init() {
+        // `bool(forKey:)` returns false for a missing key. We want the *first*
+        // launch (no key written yet) to be muted, so check presence first.
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: Self.mutedKey) == nil {
+            self.isMuted = true
+            defaults.set(true, forKey: Self.mutedKey)
+        } else {
+            self.isMuted = defaults.bool(forKey: Self.mutedKey)
+        }
+    }
 }

@@ -6,6 +6,7 @@ struct Five67App: App {
     @State private var loadResult: Result<ModelContainer, Error>
     @State private var playbackSession = PlaybackSession()
     @State private var router = AppRouter()
+    @State private var styleStore = StyleStore()
 
     init() {
         _loadResult = State(initialValue: Self.loadContainer())
@@ -19,6 +20,7 @@ struct Five67App: App {
                     .modelContainer(container)
                     .environment(playbackSession)
                     .environment(router)
+                    .environment(styleStore)
             case .failure(let error):
                 MigrationFailureView(error: error) {
                     Self.wipeDefaultStore()
