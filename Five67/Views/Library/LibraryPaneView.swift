@@ -38,7 +38,6 @@ struct LibraryPaneView: View {
     private var allVideos: [Video]
 
     @AppStorage("libraryPaneTab") private var tab: PaneTab = .moves
-    @AppStorage("movesFilter") private var movesFilter: MovesFilter = .all
     @State private var search = ""
 
     @State private var deleteVideoTarget: Video?
@@ -73,7 +72,6 @@ struct LibraryPaneView: View {
             let videoMatches = trimmedSearch.isEmpty
                 || video.displayName.localizedCaseInsensitiveContains(trimmedSearch)
             let moves = video.movesSorted.filter { move in
-                guard filterMatches(move) else { return false }
                 if trimmedSearch.isEmpty { return true }
                 return videoMatches || move.name.localizedCaseInsensitiveContains(trimmedSearch)
             }
@@ -93,13 +91,10 @@ struct LibraryPaneView: View {
     private var isEmpty: Bool { styleVideos.isEmpty }
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: Spacing.none) {
             header
             tabPicker
             searchField
-            if tab == .moves {
-                filterChips
-            }
             content
         }
         .background(Color(.systemBackground))
@@ -131,15 +126,8 @@ struct LibraryPaneView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 14) {
-            Button {
-                onClose()
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.headline.weight(.semibold))
-                    .frame(width: 40, height: 40)
-            }
-            .accessibilityLabel("Back to feed")
+        HStack(spacing: Spacing.mdPlus) {
+            Spacer(minLength: 0)
 
             Menu {
                 Button {
@@ -154,57 +142,16 @@ struct LibraryPaneView: View {
                 }
             } label: {
                 Image(systemName: "plus")
-                    .font(.headline)
-                    .frame(width: 40, height: 40)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: Spacing.touchTarget, height: Spacing.touchTarget)
+                    .background(Color(.tertiarySystemFill), in: Circle())
             }
-            .accessibilityLabel("Import")
-
-            Button {
-                showExportTypeDialog = true
-            } label: {
-                if isExporting {
-                    ProgressView().controlSize(.small).frame(width: 40, height: 40)
-                } else {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.headline)
-                        .frame(width: 40, height: 40)
-                }
-            }
-            .disabled(isExporting)
-            .accessibilityLabel("Export Library")
-
-            Spacer(minLength: 0)
-
-            styleChip
+            .accessibilityLabel("Add video")
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 14)
-        .padding(.bottom, 10)
-    }
-
-    @ViewBuilder
-    private var styleChip: some View {
-        @Bindable var store = styleStore
-        Menu {
-            Picker("Style", selection: $store.activeStyle) {
-                Text("All").tag(DanceStyle?.none)
-                ForEach(DanceStyle.allCases) { style in
-                    Text(style.label).tag(DanceStyle?.some(style))
-                }
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Text(styleStore.label)
-                    .font(.subheadline.weight(.semibold))
-                Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.bold))
-            }
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(Color(.tertiarySystemFill), in: Capsule())
-        }
-        .accessibilityLabel("Style: \(styleStore.label)")
+        .padding(.horizontal, Spacing.lg)
+        .padding(.top, Spacing.mdPlus)
+        .padding(.bottom, Spacing.smPlus)
     }
 
     private var tabPicker: some View {
@@ -214,12 +161,12 @@ struct LibraryPaneView: View {
             }
         }
         .pickerStyle(.segmented)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 10)
+        .padding(.horizontal, Spacing.lg)
+        .padding(.bottom, Spacing.smPlus)
     }
 
     private var searchField: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.sm) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
             TextField("Search moves and videos", text: $search)
@@ -235,36 +182,11 @@ struct LibraryPaneView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, Spacing.mdPlus)
+        .padding(.vertical, Spacing.smPlus)
         .background(Color(.secondarySystemFill), in: Capsule())
-        .padding(.horizontal, 16)
-        .padding(.bottom, 12)
-    }
-
-    private var filterChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(MovesFilter.allCases) { f in
-                    Button {
-                        movesFilter = f
-                    } label: {
-                        Text(f.label)
-                            .font(.footnote.weight(.semibold))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 7)
-                            .background(
-                                movesFilter == f ? Color.accentColor : Color(.tertiarySystemFill),
-                                in: Capsule()
-                            )
-                            .foregroundStyle(movesFilter == f ? Color.white : Color.primary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 16)
-        }
-        .padding(.bottom, 10)
+        .padding(.horizontal, Spacing.lg)
+        .padding(.bottom, Spacing.md)
     }
 
     // MARK: - Content
@@ -302,7 +224,9 @@ struct LibraryPaneView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .textCase(nil)
+                        .listRowSeparator(.hidden)
                 }
+                .listSectionSeparator(.hidden)
             }
             if moveGroups.isEmpty {
                 ContentUnavailableView(
@@ -314,6 +238,8 @@ struct LibraryPaneView: View {
             }
         }
         .listStyle(.plain)
+        .scrollIndicators(.hidden)
+        .contentMargins(.bottom, Spacing.bottomBarTopOffset, for: .scrollContent)
     }
 
     private var videosList: some View {
@@ -322,7 +248,7 @@ struct LibraryPaneView: View {
                 Button {
                     onSelectVideo(video)
                 } label: {
-                    HStack(spacing: 12) {
+                    HStack(spacing: Spacing.md) {
                         VideoRowView(video: video)
                         if video.id == activeVideoID {
                             Image(systemName: "waveform")
@@ -334,7 +260,7 @@ struct LibraryPaneView: View {
                 }
                 .buttonStyle(.plain)
                 .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                .listRowInsets(EdgeInsets(top: Spacing.xsPlus, leading: Spacing.lg, bottom: Spacing.xsPlus, trailing: Spacing.lg))
                 .listRowBackground(
                     video.id == activeVideoID ? Color.accentColor.opacity(0.10) : Color.clear
                 )
@@ -358,15 +284,17 @@ struct LibraryPaneView: View {
             }
         }
         .listStyle(.plain)
+        .scrollIndicators(.hidden)
+        .contentMargins(.bottom, Spacing.bottomBarTopOffset, for: .scrollContent)
     }
 
     private var emptyState: some View {
-        VStack(spacing: 22) {
+        VStack(spacing: Spacing.xl2) {
             Spacer(minLength: 0)
             Image(systemName: "play.rectangle.on.rectangle.fill")
                 .font(.system(size: 56, weight: .semibold))
                 .foregroundStyle(.secondary)
-            VStack(spacing: 6) {
+            VStack(spacing: Spacing.xsPlus) {
                 Text("Drop in a dance video")
                     .font(.title2.weight(.bold))
                 Text("Import a practice video to start building your library.")
@@ -374,14 +302,14 @@ struct LibraryPaneView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
-            VStack(spacing: 12) {
+            VStack(spacing: Spacing.md) {
                 Button {
                     onImportPhotos()
                 } label: {
                     Label("Import from Photos", systemImage: "photo.on.rectangle")
                         .font(.headline.weight(.semibold))
                         .frame(maxWidth: .infinity)
-                        .frame(height: 52)
+                        .frame(height: Spacing.primaryButtonHeight)
                         .background(Color.accentColor, in: Capsule())
                         .foregroundStyle(.white)
                 }
@@ -391,26 +319,17 @@ struct LibraryPaneView: View {
                     Label("Import from Files", systemImage: "folder")
                         .font(.headline.weight(.semibold))
                         .frame(maxWidth: .infinity)
-                        .frame(height: 52)
+                        .frame(height: Spacing.primaryButtonHeight)
                         .background(Color(.tertiarySystemFill), in: Capsule())
                 }
             }
-            .padding(.horizontal, 28)
+            .padding(.horizontal, Spacing.xl3)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Move helpers
-
-    private func filterMatches(_ move: Move) -> Bool {
-        switch movesFilter {
-        case .named:    return !move.name.isEmpty && !move.isExcluded
-        case .unnamed:  return move.name.isEmpty && !move.isExcluded
-        case .excluded: return move.isExcluded
-        case .all:      return true
-        }
-    }
 
     private func groupTitle(for video: Video) -> String {
         (video.recordedAt ?? video.importedAt).formatted(date: .long, time: .omitted)
@@ -563,7 +482,7 @@ private extension View {
                 if isExporting.wrappedValue && !showExporterSheet.wrappedValue {
                     ZStack {
                         Color.black.opacity(0.25).ignoresSafeArea()
-                        VStack(spacing: 12) {
+                        VStack(spacing: Spacing.md) {
                             ProgressView().controlSize(.large)
                             Text("Preparing export…").font(.headline)
                             Text("This may take a moment for large libraries.")
@@ -571,9 +490,9 @@ private extension View {
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
                         }
-                        .padding(24)
+                        .padding(Spacing.xl2)
                         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-                        .padding(40)
+                        .padding(Spacing.xl5)
                     }
                     .transition(.opacity)
                 }

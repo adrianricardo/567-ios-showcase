@@ -4,10 +4,12 @@ import UIKit
 
 struct VideoPlayerSurface: UIViewRepresentable {
     let controller: PlaybackController
+    var videoGravity: AVLayerVideoGravity = .resizeAspect
 
     func makeUIView(context: Context) -> PlayerSurfaceView {
         let view = PlayerSurfaceView()
         view.player = controller.player
+        view.videoGravity = videoGravity
         view.onTap = { [controller] in controller.toggle() }
         return view
     }
@@ -15,6 +17,9 @@ struct VideoPlayerSurface: UIViewRepresentable {
     func updateUIView(_ uiView: PlayerSurfaceView, context: Context) {
         if uiView.player !== controller.player {
             uiView.player = controller.player
+        }
+        if uiView.videoGravity != videoGravity {
+            uiView.videoGravity = videoGravity
         }
     }
 }
@@ -26,6 +31,11 @@ final class PlayerSurfaceView: UIView {
     var player: AVPlayer? {
         get { playerLayer.player }
         set { playerLayer.player = newValue }
+    }
+
+    var videoGravity: AVLayerVideoGravity {
+        get { playerLayer.videoGravity }
+        set { playerLayer.videoGravity = newValue }
     }
 
     var onTap: (@MainActor () -> Void)?

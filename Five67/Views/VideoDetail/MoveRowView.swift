@@ -21,19 +21,19 @@ struct MoveRowView: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 12) {
+            HStack(spacing: Spacing.md) {
                 if move.isExcluded {
                     Image(systemName: "eye.slash")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
-                        .frame(width: 16)
-                        .padding(.leading, 16)
+                        .frame(width: Spacing.lg)
+                        .padding(.leading, Spacing.lg)
                 } else {
                     StatusDot(status: move.status)
-                        .padding(.leading, 16)
+                        .padding(.leading, Spacing.lg)
                 }
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text(displayName)
                         .font(.body)
                         .foregroundStyle(move.isExcluded ? .tertiary : .primary)
@@ -43,7 +43,7 @@ struct MoveRowView: View {
                         .foregroundStyle(.tertiary)
                 }
 
-                Spacer(minLength: 8)
+                Spacer(minLength: Spacing.sm)
 
                 if showAddName {
                     Button {
@@ -57,8 +57,8 @@ struct MoveRowView: View {
                     .tint(.accentColor)
                 }
             }
-            .padding(.trailing, 16)
-            .frame(minHeight: 56)
+            .padding(.trailing, Spacing.lg)
+            .frame(minHeight: Spacing.rowMinHeight)
             .background(
                 isActive && !move.isExcluded
                     ? Color.accentColor.opacity(0.07)
@@ -113,7 +113,6 @@ struct MoveRowView: View {
                 onSave: onRename
             )
         }
-        .overlay(alignment: .bottom) { Divider().padding(.leading, 38) }
     }
 
     private func statusIcon(for status: Status) -> String {

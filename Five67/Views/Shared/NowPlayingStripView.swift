@@ -10,7 +10,7 @@ struct NowPlayingStripView: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 10) {
+            HStack(spacing: Spacing.smPlus) {
                 StatusDot(status: move.status)
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -29,10 +29,10 @@ struct NowPlayingStripView: View {
                 Image(systemName: "arrow.up")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.tertiary)
-                    .frame(width: 28, height: 28)
+                    .frame(width: Spacing.xl3, height: Spacing.xl3)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, Spacing.mdPlus)
+            .padding(.vertical, Spacing.sm)
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
         }

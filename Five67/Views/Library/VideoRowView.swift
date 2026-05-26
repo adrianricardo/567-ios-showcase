@@ -6,9 +6,9 @@ struct VideoRowView: View {
     @State private var thumbnail: UIImage?
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.md) {
             thumbnailView
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text(video.displayName)
                     .font(.body)
                     .lineLimit(1)
@@ -18,7 +18,7 @@ struct VideoRowView: View {
             }
             Spacer(minLength: 0)
         }
-        .frame(minHeight: 56)
+        .frame(minHeight: Spacing.rowMinHeight)
         .task { await loadThumbnail() }
     }
 

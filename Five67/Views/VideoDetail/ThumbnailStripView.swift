@@ -18,7 +18,7 @@ struct ThumbnailStripView: View {
                     .fill(Color(.systemGray5))
 
                 // Thumbnails
-                HStack(spacing: 0) {
+                HStack(spacing: Spacing.none) {
                     ForEach(0..<images.count, id: \.self) { i in
                         Group {
                             if let img = images[i] {

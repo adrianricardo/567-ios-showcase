@@ -29,25 +29,25 @@ struct VideoHeroView<Rail: View>: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: Spacing.none) {
             ZStack {
                 Color.black
                 VideoPlayerSurface(controller: controller)
                     .aspectRatio(playerAspectRatio, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .padding(12)
+                    .padding(Spacing.md)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 320)
             .overlay(alignment: .top) {
                 TimestampPill(time: controller.currentTime)
-                    .padding(.top, 18)
+                    .padding(.top, Spacing.lgPlus)
                     .allowsHitTesting(false)
             }
             .overlay(alignment: .topTrailing) {
                 rail()
-                    .padding(.top, 18)
-                    .padding(.trailing, 18)
+                    .padding(.top, Spacing.lgPlus)
+                    .padding(.trailing, Spacing.lgPlus)
             }
 
             TrimTrackView(
@@ -61,10 +61,10 @@ struct VideoHeroView<Rail: View>: View {
                 onTapSegment: onTapSegment,
                 onHandleDragComplete: onHandleDragComplete
             )
-            .frame(height: 52)
-            .padding(.horizontal, 16)
-            .padding(.top, 14)
-            .padding(.bottom, 16)
+            .frame(height: Spacing.primaryButtonHeight)
+            .padding(.horizontal, Spacing.lg)
+            .padding(.top, Spacing.mdPlus)
+            .padding(.bottom, Spacing.lg)
         }
         .background(Color.black.ignoresSafeArea(edges: .top))
         .onAppear {

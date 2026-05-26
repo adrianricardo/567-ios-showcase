@@ -8,15 +8,15 @@ struct ImportPreviewSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
+            VStack(spacing: Spacing.xl2) {
                 Spacer()
 
-                VStack(spacing: 16) {
+                VStack(spacing: Spacing.lg) {
                     Image(systemName: "square.and.arrow.down.on.square")
                         .font(.system(size: 56, weight: .light))
                         .foregroundStyle(.tint)
 
-                    VStack(spacing: 8) {
+                    VStack(spacing: Spacing.sm) {
                         Text(headline)
                             .font(.title2.weight(.semibold))
                             .multilineTextAlignment(.center)
@@ -28,7 +28,7 @@ struct ImportPreviewSheet: View {
                         }
                     }
                 }
-                .padding(.horizontal, 32)
+                .padding(.horizontal, Spacing.xl4)
 
                 Spacer()
 
@@ -36,12 +36,12 @@ struct ImportPreviewSheet: View {
                     Text(newCount == 0 ? "Done" : "Continue")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 52)
+                        .frame(height: Spacing.primaryButtonHeight)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 12)
+                .padding(.horizontal, Spacing.xl)
+                .padding(.bottom, Spacing.md)
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

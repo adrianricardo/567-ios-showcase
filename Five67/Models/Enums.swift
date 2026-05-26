@@ -6,19 +6,6 @@ enum Category: String, Codable, CaseIterable, Identifiable {
     var displayName: String { rawValue.capitalized }
 }
 
-enum MovesFilter: String, CaseIterable, Identifiable {
-    case named, unnamed, excluded, all
-    var id: String { rawValue }
-    var label: String {
-        switch self {
-        case .named:    return "Named"
-        case .unnamed:  return "Unnamed"
-        case .excluded: return "Excluded"
-        case .all:      return "All"
-        }
-    }
-}
-
 enum Status: String, Codable, CaseIterable {
     case empty, stuck, mastered
 

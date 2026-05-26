@@ -102,7 +102,7 @@ struct VideoDetailView: View {
     // MARK: - Sections
 
     private var heroSection: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: Spacing.none) {
             topBar
             VideoHeroView(
                 controller: controller,
@@ -111,7 +111,7 @@ struct VideoDetailView: View {
                 allowsMarkerEditing: true,
                 showsPlaceholderWhenEmpty: true
             ) {
-                VStack(spacing: 14) {
+                VStack(spacing: Spacing.mdPlus) {
                     MuteRailButton()
                     LoopRailButton(controller: controller)
                     SplitRailButton(controller: controller, onSplit: split)
@@ -121,12 +121,12 @@ struct VideoDetailView: View {
     }
 
     private var topBar: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.sm) {
             Button { dismiss() } label: {
                 Image(systemName: "chevron.left")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
+                    .frame(width: Spacing.touchTarget, height: Spacing.touchTarget)
             }
             .accessibilityLabel("Back")
 
@@ -147,14 +147,14 @@ struct VideoDetailView: View {
                     Text("Done")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Color.accentColor)
-                        .padding(.horizontal, 12)
-                        .frame(height: 44)
+                        .padding(.horizontal, Spacing.md)
+                        .frame(height: Spacing.touchTarget)
                 }
                 .accessibilityLabel("Done editing")
             }
         }
-        .padding(.horizontal, 8)
-        .frame(height: 44)
+        .padding(.horizontal, Spacing.sm)
+        .frame(height: Spacing.touchTarget)
         .background(Color.black)
     }
 
@@ -259,7 +259,7 @@ struct VideoDetailView: View {
     private func finishEditing() {
         controller.pause()
         Haptics.success()
-        router.selectedTab = .moves
+        router.selectedTab = .feed
         // Report the most recently marked move's start time (if any) so a
         // feed presenter can re-open on that move's first frame.
         onFinish?(lastMarkedTime)

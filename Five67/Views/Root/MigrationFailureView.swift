@@ -13,13 +13,13 @@ struct MigrationFailureView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: Spacing.xl2) {
                 header
                 errorDetails
                 actions
-                Spacer(minLength: 16)
+                Spacer(minLength: Spacing.lg)
             }
-            .padding(24)
+            .padding(Spacing.xl2)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Color(.systemBackground).ignoresSafeArea())
@@ -60,7 +60,7 @@ struct MigrationFailureView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 44))
                 .foregroundStyle(.orange)
@@ -74,21 +74,21 @@ struct MigrationFailureView: View {
     }
 
     private var errorDetails: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Spacing.xsPlus) {
             Text("Error details")
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.secondary)
             Text(String(describing: error))
                 .font(.footnote.monospaced())
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
+                .padding(Spacing.md)
                 .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .textSelection(.enabled)
         }
     }
 
     private var actions: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Spacing.md) {
             Button {
                 presentExporter()
             } label: {

@@ -2,13 +2,13 @@ import Foundation
 import Observation
 
 enum AppTab: Hashable {
-    case moves
+    case feed
     case library
 }
 
-/// Cross-tab navigation glue. Lives in the environment so deep views can
-/// switch tabs (e.g. VideoDetail's "Done" action jumping to Moves).
+/// Drives the global Library/Feed switch. Lives in the environment so deep
+/// views can route back (e.g. VideoDetail's "Done" jumps to Feed).
 @MainActor
 @Observable final class AppRouter {
-    var selectedTab: AppTab = .library
+    var selectedTab: AppTab = .feed
 }

@@ -8,6 +8,7 @@ struct VideoFeedView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(PlaybackSession.self) private var session
     @Environment(StyleStore.self) private var styleStore
+    @Environment(AppRouter.self) private var router
     // Order shared with the Library pane so the feed's "n / total" position
     // matches the list. importedAt is always present (recordedAt can be nil for
     // Files imports) and keeps a fresh import at index 0 so we can land on it.
@@ -152,6 +153,51 @@ struct VideoFeedView: View {
                 .offset(x: (paneProgress - 1) * geo.size.width)
                 .allowsHitTesting(paneProgress >= 1)
                 .shadow(color: .black.opacity(0.25 * paneProgress), radius: 18, x: 6)
+
+                // Bottom stack: feed card (when on the feed) directly above the
+                // GlobalBottomBar. They share this VStack's coordinate space so
+                // the card-to-bar gap is just the `Spacing.sm` between them.
+                VStack(spacing: Spacing.none) {
+                    Spacer(minLength: 0)
+
+                    if let video = selectedVideo, !isPaneOpen {
+                        bottomChrome(video: video)
+                            .padding(.horizontal, Spacing.lgPlus)
+                            .padding(.bottom, Spacing.sm)
+                            .offset(x: paneProgress * geo.size.width)
+                            .opacity(coachActive ? 0 : chromeOpacity(height: geo.size.height))
+                            .allowsHitTesting(!coachActive)
+                            .transition(.opacity)
+                    }
+
+                    GlobalBottomBar(
+                        selection: tabBinding,
+                        styleStore: styleStore
+                    )
+                    .padding(.bottom, Spacing.sm)
+                }
+                .ignoresSafeArea(edges: .bottom)
+                .opacity(coachActive ? 0 : 1)
+                .allowsHitTesting(!coachActive)
+                .animation(.easeInOut(duration: 0.25), value: coachActive)
+                .animation(.snappy(duration: 0.25), value: isPaneOpen)
+
+                // Right rail (loop / edit) lives in the same outer coord space
+                // so its bottom offset is just `bar + gap + card + gap`.
+                if let _ = selectedVideo, !isPaneOpen {
+                    VStack(spacing: Spacing.none) {
+                        Spacer(minLength: 0)
+                        rightRail
+                            .padding(.trailing, Spacing.mdPlus)
+                            .padding(.bottom, rightRailBottomInset)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .ignoresSafeArea(edges: .bottom)
+                    .offset(x: paneProgress * geo.size.width)
+                    .opacity(coachActive ? 0 : chromeOpacity(height: geo.size.height))
+                    .allowsHitTesting(!coachActive)
+                    .animation(.easeInOut(duration: 0.25), value: coachActive)
+                }
             }
             .gesture(feedAndPaneGesture(size: geo.size))
         }
@@ -204,6 +250,16 @@ struct VideoFeedView: View {
         .onAppear {
             syncWindow(autoplay: true)
             maybeAdvanceCoach()
+            if router.selectedTab == .library {
+                paneProgress = 1
+                activeController?.pause()
+            }
+        }
+        .onChange(of: router.selectedTab) { _, new in
+            let shouldBeOpen = (new == .library)
+            if isPaneOpen != shouldBeOpen {
+                settlePane(open: shouldBeOpen)
+            }
         }
         .onChange(of: selectedIndex) { _, _ in syncWindow(autoplay: true) }
         .onChange(of: styleStore.activeStyle) { _, _ in
@@ -234,54 +290,43 @@ struct VideoFeedView: View {
 
     private func feedSurface(for video: Video) -> some View {
         GeometryReader { geo in
+            let fullHeight = geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom
             ZStack {
-                videoStack(height: geo.size.height, width: geo.size.width)
+                videoStack(height: fullHeight, width: geo.size.width)
 
                 tapZones
 
                 playbackOverlay
 
-                VStack(spacing: 0) {
+                // Top chrome respects the top safe area (sits under the
+                // status bar / dynamic island). Bottom chrome + right rail
+                // live in the outer body so they share coord space with the
+                // GlobalBottomBar — see `body`.
+                VStack(spacing: Spacing.none) {
                     topChrome(video: video)
+                        .padding(.horizontal, Spacing.lgPlus)
+                        .padding(.top, Spacing.smPlus)
                     Spacer(minLength: 0)
-                    bottomChrome(video: video)
                 }
-                .padding(.horizontal, 18)
-                .padding(.top, 12)
-                .padding(.bottom, max(18, geo.safeAreaInsets.bottom + 8))
                 .opacity(coachActive ? 0 : chromeOpacity(height: geo.size.height))
                 .animation(.easeInOut(duration: 0.25), value: coachActive)
                 .allowsHitTesting(!coachActive)
-
-                rightRail
-                    .padding(.trailing, 14)
-                    .padding(.bottom, max(180, geo.safeAreaInsets.bottom + 160))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                    .opacity(coachActive ? 0 : chromeOpacity(height: geo.size.height))
-                    .animation(.easeInOut(duration: 0.25), value: coachActive)
-                    .allowsHitTesting(!coachActive)
-
-                VStack {
-                    Spacer(minLength: 0)
-                    VideoPeekIndicator(
-                        currentIndex: selectedIndex,
-                        totalCount: videos.count,
-                        dragOffset: dragOffset
-                    )
-                    .padding(.bottom, max(110, geo.safeAreaInsets.bottom + 92))
-                }
-                .allowsHitTesting(false)
-                .opacity(coachActive ? 0 : 1)
-                .animation(.easeInOut(duration: 0.25), value: coachActive)
             }
             .contentShape(Rectangle())
         }
     }
 
+    // The right rail sits above the bottom chrome card. Bar top is at
+    // `bottomBarTopOffset`, then the card sits above with an `sm` gap,
+    // is roughly `xl5*3` tall, and we leave another `sm` gap above it.
+    private var rightRailBottomInset: CGFloat {
+        Spacing.bottomBarTopOffset + Spacing.sm + 120 + Spacing.sm
+    }
+
     @ViewBuilder
     private var rightRail: some View {
         if let controller = activeController {
-            VStack(spacing: 16) {
+            VStack(spacing: Spacing.lg) {
                 LoopRailButton(controller: controller)
                 Button {
                     openEditor()
@@ -299,7 +344,7 @@ struct VideoFeedView: View {
                 let video = videos[index]
                 Group {
                     if let controller = controllers[video.id] {
-                        VideoPlayerSurface(controller: controller)
+                        VideoPlayerSurface(controller: controller, videoGravity: .resizeAspectFill)
                             .overlay(ambientGradient)
                     } else {
                         Color.black
@@ -326,6 +371,7 @@ struct VideoFeedView: View {
         let progress = min(abs(dragOffset) / max(height * 0.5, 1), 1)
         return 1 - progress * 0.85
     }
+
 
     private var ambientGradient: some View {
         LinearGradient(
@@ -393,103 +439,36 @@ struct VideoFeedView: View {
     }
 
     private func topChrome(video: Video) -> some View {
-        VStack(spacing: 14) {
-            FeedSegmentRail(
-                moves: activeMoves,
-                activeMoveID: activeMoveID,
-                currentTime: activeController?.currentTime ?? 0,
-                duration: effectiveDuration(for: video),
-                onSelect: { move in play(move) }
-            )
-
-            HStack(spacing: 12) {
-                libraryButton
-
-                Text(video.displayName)
-                    .font(.title3.weight(.bold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .shadow(color: .black.opacity(0.45), radius: 10, y: 4)
-
-                Spacer(minLength: 0)
-
-                feedStyleChip
-            }
-        }
+        FeedSegmentRail(
+            moves: activeMoves,
+            activeMoveID: activeMoveID,
+            currentTime: activeController?.currentTime ?? 0,
+            duration: effectiveDuration(for: video),
+            onSelect: { move in play(move) }
+        )
     }
 
-    private var libraryButton: some View {
-        Button {
-            Haptics.light()
-            openPane()
-        } label: {
-            Label("Library", systemImage: "square.grid.2x2.fill")
-                .labelStyle(.iconOnly)
-                .font(.headline)
-                .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
-                .background(.ultraThinMaterial, in: Circle())
-                .overlay(Circle().stroke(.white.opacity(0.16)))
-        }
-        .accessibilityLabel("Open library")
-    }
-
-    // Top controls shown over the empty state so the Library button and—
-    // critically—the Style chip never disappear. Without this, a style filter
-    // that matches no videos would strand the user with no way to switch back.
     private var emptyStateTopBar: some View {
-        VStack {
-            HStack(spacing: 12) {
-                libraryButton
-                Spacer(minLength: 0)
-                feedStyleChip
-            }
-            .padding(.horizontal, 18)
-            .padding(.top, 12)
-            Spacer(minLength: 0)
-        }
+        EmptyView()
     }
 
-    private var feedStyleChip: some View {
-        Menu {
-            Picker("Style", selection: styleBinding) {
-                Text("All").tag(DanceStyle?.none)
-                ForEach(DanceStyle.allCases) { style in
-                    Text(style.label).tag(DanceStyle?.some(style))
-                }
-            }
-            #if DEBUG
-            Divider()
-            Button("Reset coach", systemImage: "arrow.counterclockwise") { resetCoach() }
-            #endif
-        } label: {
-            HStack(spacing: 4) {
-                Text(styleStore.label)
-                    .font(.subheadline.weight(.bold))
-                Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.bold))
-            }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 14)
-            .frame(height: 44)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().stroke(.white.opacity(0.16)))
-        }
-        .accessibilityLabel("Style: \(styleStore.label)")
-    }
-
-    private var styleBinding: Binding<DanceStyle?> {
+    private var tabBinding: Binding<AppTab> {
         Binding(
-            get: { styleStore.activeStyle },
-            set: { styleStore.activeStyle = $0 }
+            get: { router.selectedTab },
+            set: { router.selectedTab = $0 }
         )
     }
 
     private func bottomChrome(video: Video) -> some View {
-        VStack(spacing: 16) {
+        VStack(spacing: Spacing.lg) {
             if let activeMove {
-                MoveCard(move: activeMove, index: activeMoveIndex, total: activeMoves.count)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                MoveCard(
+                    move: activeMove,
+                    index: activeMoveIndex,
+                    total: activeMoves.count,
+                    videoDate: video.recordedAt ?? video.importedAt
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
                 DiscoveryHintCard(duration: effectiveDuration(for: video), moveCount: activeMoves.count)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -499,21 +478,21 @@ struct VideoFeedView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 26) {
-            Spacer(minLength: 30)
+        VStack(spacing: Spacing.xl3) {
+            Spacer(minLength: Spacing.xl4)
 
             ZStack {
                 Circle()
                     .fill(.cyan.opacity(0.18))
                     .frame(width: 170, height: 170)
-                    .blur(radius: 18)
+                    .blur(radius: Spacing.lgPlus)
                 Image(systemName: "play.rectangle.on.rectangle.fill")
                     .font(.system(size: 70, weight: .semibold))
                     .foregroundStyle(.white)
                     .symbolEffect(.pulse, options: .repeating)
             }
 
-            VStack(spacing: 10) {
+            VStack(spacing: Spacing.smPlus) {
                 Text("Drop in a dance video")
                     .font(.largeTitle.weight(.heavy))
                     .multilineTextAlignment(.center)
@@ -522,10 +501,10 @@ struct VideoFeedView: View {
                     .font(.body.weight(.medium))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.7))
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, Spacing.xl2)
             }
 
-            VStack(spacing: 12) {
+            VStack(spacing: Spacing.md) {
                 Button {
                     showPhotosPicker = true
                 } label: {
@@ -533,7 +512,7 @@ struct VideoFeedView: View {
                         .font(.headline.weight(.bold))
                         .foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 56)
+                        .frame(height: Spacing.rowMinHeight)
                         .background(.white, in: Capsule())
                 }
                 Button {
@@ -548,9 +527,9 @@ struct VideoFeedView: View {
                         .overlay(Capsule().stroke(.white.opacity(0.14)))
                 }
             }
-            .padding(.horizontal, 26)
+            .padding(.horizontal, Spacing.xl3)
 
-            Spacer(minLength: 20)
+            Spacer(minLength: Spacing.xl)
         }
         .background(
             RadialGradient(colors: [.cyan.opacity(0.24), .purple.opacity(0.13), .black], center: .top, startRadius: 20, endRadius: 620)
@@ -569,7 +548,7 @@ struct VideoFeedView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
-            VStack(spacing: 18) {
+            VStack(spacing: Spacing.lgPlus) {
                 Image(systemName: "chevron.up")
                     .font(.system(size: 34, weight: .heavy))
                     .foregroundStyle(.white)
@@ -579,7 +558,7 @@ struct VideoFeedView: View {
                     .font(.title3.weight(.heavy))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 32)
+                    .padding(.horizontal, Spacing.xl4)
 
                 Button {
                     dismissSwipeCoach()
@@ -587,11 +566,11 @@ struct VideoFeedView: View {
                     Text("Got it")
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(.black)
-                        .padding(.horizontal, 28)
+                        .padding(.horizontal, Spacing.xl3)
                         .frame(height: 46)
                         .background(.white, in: Capsule())
                 }
-                .padding(.top, 4)
+                .padding(.top, Spacing.xs)
             }
         }
     }
@@ -606,7 +585,7 @@ struct VideoFeedView: View {
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
 
-                HStack(spacing: 0) {
+                HStack(spacing: Spacing.none) {
                     tapZoneHighlight(
                         label: "Previous move",
                         systemImage: "chevron.left"
@@ -620,14 +599,14 @@ struct VideoFeedView: View {
                 .allowsHitTesting(false)
                 .ignoresSafeArea()
 
-                VStack(spacing: 14) {
+                VStack(spacing: Spacing.mdPlus) {
                     Spacer(minLength: 0)
 
                     Text("Tap the sides to skip between moves")
                         .font(.title3.weight(.heavy))
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 36)
+                        .padding(.horizontal, Spacing.xl4 + Spacing.xs)
                         .shadow(color: .black.opacity(0.45), radius: 12, y: 4)
 
                     Button {
@@ -636,7 +615,7 @@ struct VideoFeedView: View {
                         Text("Got it")
                             .font(.subheadline.weight(.bold))
                             .foregroundStyle(.black)
-                            .padding(.horizontal, 28)
+                            .padding(.horizontal, Spacing.xl3)
                             .frame(height: 46)
                             .background(.white, in: Capsule())
                     }
@@ -653,7 +632,7 @@ struct VideoFeedView: View {
                 .fill(.white.opacity(0.10))
                 .overlay(Rectangle().stroke(.white.opacity(0.35), lineWidth: 1))
 
-            VStack(spacing: 10) {
+            VStack(spacing: Spacing.smPlus) {
                 Image(systemName: systemImage)
                     .font(.system(size: 28, weight: .heavy))
                     .foregroundStyle(.white)
@@ -763,6 +742,10 @@ struct VideoFeedView: View {
     private func settlePane(open: Bool) {
         withAnimation(.snappy(duration: 0.34, extraBounce: 0.02)) {
             paneProgress = open ? 1 : 0
+        }
+        let targetTab: AppTab = open ? .library : .feed
+        if router.selectedTab != targetTab {
+            router.selectedTab = targetTab
         }
         if open {
             activeController?.pause()
@@ -1112,43 +1095,56 @@ private struct FeedSegmentRail: View {
     let duration: TimeInterval
     let onSelect: (Move) -> Void
 
+    /// Single rail height across all three states (no moves, inactive
+    /// segment, active segment) so the bar reads as one consistent shape.
+    private static let railHeight: CGFloat = 12
+
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: Spacing.xs) {
             if moves.isEmpty {
-                Capsule()
-                    .fill(.white.opacity(0.32))
-                    .overlay(alignment: .leading) {
-                        Capsule()
-                            .fill(.white)
-                            .frame(width: progressWidth(totalWidth: 200))
-                    }
+                progressCapsule
+                    .frame(maxWidth: .infinity)
+                    .frame(height: Self.railHeight)
             } else {
                 ForEach(Array(moves.enumerated()), id: \.element.id) { index, move in
                     Button {
                         onSelect(move)
                     } label: {
-                        Capsule()
-                            .fill(fill(for: move, index: index))
-                            .frame(height: move.id == activeMoveID ? 9 : 5)
-                            .overlay(alignment: .leading) {
-                                if move.id == activeMoveID {
-                                    Capsule()
-                                        .fill(.white)
-                                        .frame(maxWidth: .infinity)
-                                        .scaleEffect(x: segmentProgress(for: move), y: 1, anchor: .leading)
-                                }
-                            }
+                        segmentCapsule(for: move, index: index)
                     }
                     .buttonStyle(.plain)
-                    .frame(maxWidth: move.id == activeMoveID ? 68 : 34)
-                    .animation(.snappy(duration: 0.26, extraBounce: 0.06), value: activeMoveID)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: Self.railHeight)
                 }
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 14)
-        .padding(.horizontal, 2)
+        .padding(.horizontal, Spacing.xxs)
         .accessibilityLabel("Move rail")
+    }
+
+    private var progressCapsule: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(.white.opacity(0.32))
+                Capsule()
+                    .fill(.white)
+                    .frame(width: geo.size.width * progressFraction)
+            }
+        }
+    }
+
+    private func segmentCapsule(for move: Move, index: Int) -> some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(fill(for: move, index: index))
+                if move.id == activeMoveID {
+                    Capsule()
+                        .fill(.white)
+                        .frame(width: geo.size.width * segmentProgress(for: move))
+                }
+            }
+        }
     }
 
     private func fill(for move: Move, index: Int) -> Color {
@@ -1169,9 +1165,9 @@ private struct FeedSegmentRail: View {
         return CGFloat(max(0, min(1, (currentTime - move.time) / span)))
     }
 
-    private func progressWidth(totalWidth: CGFloat) -> CGFloat {
+    private var progressFraction: CGFloat {
         guard duration > 0 else { return 0 }
-        return totalWidth * CGFloat(max(0, min(1, currentTime / duration)))
+        return CGFloat(max(0, min(1, currentTime / duration)))
     }
 }
 
@@ -1179,30 +1175,24 @@ private struct MoveCard: View {
     let move: Move
     let index: Int
     let total: Int
+    let videoDate: Date
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 14) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Move \(index + 1) of \(max(total, 1))")
-                    .font(.caption.weight(.bold))
-                    .tracking(0.8)
-                    .foregroundStyle(.cyan.opacity(0.9))
-                Text(move.name.isEmpty ? "Untitled move" : move.name)
-                    .font(.title2.weight(.heavy))
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                Text(move.rangeLabel)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.66))
-            }
-            Spacer(minLength: 0)
-            Image(systemName: move.isExcluded ? "eye.slash.fill" : "sparkle.magnifyingglass")
-                .font(.title3.weight(.bold))
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text("Move \(index + 1) of \(max(total, 1))")
+                .font(.caption.weight(.bold))
+                .tracking(0.8)
+                .foregroundStyle(.cyan.opacity(0.9))
+            Text(move.name.isEmpty ? "Untitled move" : move.name)
+                .font(.title2.weight(.heavy))
                 .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
-                .background(.white.opacity(0.13), in: Circle())
+                .lineLimit(2)
+            Text(videoDate.formatted(date: .long, time: .omitted))
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.66))
         }
-        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Spacing.lg)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(.white.opacity(0.16)))
     }
@@ -1213,13 +1203,13 @@ private struct DiscoveryHintCard: View {
     let moveCount: Int
 
     var body: some View {
-        HStack(spacing: 13) {
+        HStack(spacing: Spacing.md) {
             Image(systemName: "hand.tap.fill")
                 .font(.title3.weight(.bold))
                 .foregroundStyle(.black)
                 .frame(width: 42, height: 42)
                 .background(.white, in: Circle())
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text(moveCount == 0 ? "Tap right to skim" : "Tap through moves")
                     .font(.headline.weight(.bold))
                     .foregroundStyle(.white)
@@ -1230,29 +1220,9 @@ private struct DiscoveryHintCard: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(15)
+        .padding(Spacing.lg)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(.white.opacity(0.14)))
     }
 }
 
-private struct VideoPeekIndicator: View {
-    let currentIndex: Int
-    let totalCount: Int
-    let dragOffset: CGFloat
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: dragOffset < 0 ? "arrow.down" : "arrow.up")
-                .font(.caption.weight(.bold))
-            Text("\(currentIndex + 1) / \(max(totalCount, 1))")
-                .font(.caption.weight(.bold))
-        }
-        .foregroundStyle(.white.opacity(abs(dragOffset) > 20 ? 0.88 : 0.52))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.black.opacity(0.34), in: Capsule())
-        .scaleEffect(abs(dragOffset) > 60 ? 1.06 : 1)
-        .animation(.snappy(duration: 0.22, extraBounce: 0.04), value: dragOffset)
-    }
-}
