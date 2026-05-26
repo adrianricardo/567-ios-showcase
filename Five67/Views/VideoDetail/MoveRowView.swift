@@ -51,7 +51,7 @@ struct MoveRowView: View {
             .frame(minHeight: Spacing.rowMinHeight + Spacing.smPlus)
             .background(
                 isActive && !move.isExcluded
-                    ? Color.white.opacity(0.05)
+                    ? Theme.rowActiveBackground
                     : Color(.systemBackground)
             )
             .contentShape(Rectangle())

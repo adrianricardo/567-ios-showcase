@@ -7,6 +7,7 @@ struct Five67App: App {
     @State private var playbackSession = PlaybackSession()
     @State private var router = AppRouter()
     @State private var styleStore = StyleStore()
+    @State private var splashFinished = false
 
     init() {
         _loadResult = State(initialValue: Self.loadContainer())
@@ -14,17 +15,24 @@ struct Five67App: App {
 
     var body: some Scene {
         WindowGroup {
-            switch loadResult {
-            case .success(let container):
-                RootView()
-                    .modelContainer(container)
-                    .environment(playbackSession)
-                    .environment(router)
-                    .environment(styleStore)
-            case .failure(let error):
-                MigrationFailureView(error: error) {
-                    Self.wipeDefaultStore()
-                    loadResult = Self.loadContainer()
+            ZStack {
+                switch loadResult {
+                case .success(let container):
+                    RootView()
+                        .modelContainer(container)
+                        .environment(playbackSession)
+                        .environment(router)
+                        .environment(styleStore)
+                case .failure(let error):
+                    MigrationFailureView(error: error) {
+                        Self.wipeDefaultStore()
+                        loadResult = Self.loadContainer()
+                    }
+                }
+
+                if !splashFinished {
+                    SplashView { splashFinished = true }
+                        .transition(.identity)
                 }
             }
         }

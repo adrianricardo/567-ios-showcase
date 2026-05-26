@@ -224,7 +224,7 @@ struct LibraryPaneView: View {
                         if video.id == activeVideoID {
                             Image(systemName: "waveform")
                                 .font(.caption.weight(.bold))
-                                .foregroundStyle(Color.accentColor)
+                                .foregroundStyle(Theme.nowPlayingIndicator)
                         }
                     }
                     .contentShape(Rectangle())
@@ -233,7 +233,7 @@ struct LibraryPaneView: View {
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: Spacing.xsPlus, leading: Spacing.lg, bottom: Spacing.xsPlus, trailing: Spacing.lg))
                 .listRowBackground(
-                    video.id == activeVideoID ? Color.accentColor.opacity(0.10) : Color.clear
+                    video.id == activeVideoID ? Theme.rowActiveBackground : Color.clear
                 )
                 .swipeActions(edge: .trailing) {
                     Button {
