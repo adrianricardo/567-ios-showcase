@@ -24,7 +24,7 @@ struct GlobalBottomBar: View {
             tabButton(.feed, label: "Feed", systemImage: "play.rectangle.fill")
         }
         .padding(Spacing.xsPlus)
-        .background(.thickMaterial, in: Capsule())
+        .liquidGlass(in: Capsule())
         .shadow(color: .black.opacity(0.14), radius: 16, y: 4)
     }
 
@@ -71,7 +71,7 @@ struct GlobalBottomBar: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(width: 76, height: 76)
-                .background(.thickMaterial, in: Circle())
+                .liquidGlass(in: Circle(), interactive: true)
                 .shadow(color: .black.opacity(0.14), radius: 16, y: 4)
         }
         .accessibilityLabel("Style: \(styleStore.label)")

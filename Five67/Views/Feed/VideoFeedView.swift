@@ -326,14 +326,16 @@ struct VideoFeedView: View {
     @ViewBuilder
     private var rightRail: some View {
         if let controller = activeController {
-            VStack(spacing: Spacing.lg) {
-                LoopRailButton(controller: controller)
-                Button {
-                    openEditor()
-                } label: {
-                    RailIcon(systemName: "slider.horizontal.3")
+            GlassCluster(spacing: Spacing.lg) {
+                VStack(spacing: Spacing.lg) {
+                    LoopRailButton(controller: controller)
+                    Button {
+                        openEditor()
+                    } label: {
+                        RailIcon(systemName: "slider.horizontal.3")
+                    }
+                    .accessibilityLabel("Edit moves")
                 }
-                .accessibilityLabel("Edit moves")
             }
         }
     }
@@ -410,28 +412,30 @@ struct VideoFeedView: View {
     @ViewBuilder
     private var playbackOverlay: some View {
         if let controller = activeController, !controller.isPlaying, !coachActive {
-            ZStack {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 22, weight: .heavy))
-                    .foregroundStyle(.white)
-                    .frame(width: 48, height: 48)
-                    .background(.black.opacity(0.45), in: Circle())
-                    .allowsHitTesting(false)
-
-                Button {
-                    session.isMuted.toggle()
-                    controller.isMuted = session.isMuted
-                    Haptics.light()
-                } label: {
-                    Image(systemName: session.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                        .font(.system(size: 10, weight: .bold))
-                        .contentTransition(.identity)
+            GlassCluster(spacing: 14) {
+                ZStack {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 22, weight: .heavy))
                         .foregroundStyle(.white)
-                        .frame(width: 26, height: 26)
-                        .background(.black.opacity(0.45), in: Circle())
+                        .frame(width: 48, height: 48)
+                        .liquidGlass(in: Circle())
+                        .allowsHitTesting(false)
+
+                    Button {
+                        session.isMuted.toggle()
+                        controller.isMuted = session.isMuted
+                        Haptics.light()
+                    } label: {
+                        Image(systemName: session.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                            .font(.system(size: 10, weight: .bold))
+                            .contentTransition(.identity)
+                            .foregroundStyle(.white)
+                            .frame(width: 26, height: 26)
+                            .liquidGlass(in: Circle(), interactive: true)
+                    }
+                    .accessibilityLabel(session.isMuted ? "Unmute" : "Mute")
+                    .offset(y: -(24 + 14 + 13))
                 }
-                .accessibilityLabel(session.isMuted ? "Unmute" : "Mute")
-                .offset(y: -(24 + 14 + 13))
             }
             .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
             .transition(.opacity.combined(with: .scale(scale: 0.86)))
