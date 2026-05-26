@@ -9,7 +9,7 @@ import SwiftData
     var importedAt: Date
     var recordedAt: Date?
     var duration: TimeInterval
-    var style: DanceStyle?
+    var style: Style?
     @Relationship(deleteRule: .cascade) var moves: [Move] = []
 
     init(
@@ -20,7 +20,7 @@ import SwiftData
         importedAt: Date = Date(),
         recordedAt: Date? = nil,
         duration: TimeInterval,
-        style: DanceStyle? = nil
+        style: Style? = nil
     ) {
         self.id = id
         self.displayName = displayName

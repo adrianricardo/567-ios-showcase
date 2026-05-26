@@ -158,12 +158,102 @@ enum SchemaV2: VersionedSchema {
     }
 }
 
-// MARK: - V3 (adds Video.style) — current live schema
+// MARK: - V3 (adds Video.style: DanceStyle? scalar)
+//
+// Inlined so the live `Video` type can move forward to V4 without changing
+// what V3 means on disk. The V4 migration reads from these V3 types.
 
 enum SchemaV3: VersionedSchema {
     static var versionIdentifier: Schema.Version { Schema.Version(3, 0, 0) }
     static var models: [any PersistentModel.Type] {
         [Video.self, Move.self]
+    }
+
+    enum DanceStyle: String, Codable {
+        case cumbia, salsa, bachata
+    }
+
+    @Model
+    final class Video {
+        @Attribute(.unique) var id: UUID
+        var displayName: String
+        var localFilename: String
+        var sourceAssetID: String?
+        var importedAt: Date
+        var recordedAt: Date?
+        var duration: TimeInterval
+        var style: DanceStyle?
+        @Relationship(deleteRule: .cascade) var moves: [Move] = []
+
+        init(
+            id: UUID = UUID(),
+            displayName: String,
+            localFilename: String,
+            sourceAssetID: String? = nil,
+            importedAt: Date = Date(),
+            recordedAt: Date? = nil,
+            duration: TimeInterval,
+            style: DanceStyle? = nil
+        ) {
+            self.id = id
+            self.displayName = displayName
+            self.localFilename = localFilename
+            self.sourceAssetID = sourceAssetID
+            self.importedAt = importedAt
+            self.recordedAt = recordedAt
+            self.duration = duration
+            self.style = style
+        }
+    }
+
+    @Model
+    final class Move {
+        @Attribute(.unique) var id: UUID
+        var name: String
+        var category: Category
+        var status: Status
+        var time: TimeInterval
+        var endTime: TimeInterval?
+        var notes: String
+        var isExcluded: Bool
+        var createdAt: Date
+        var updatedAt: Date
+        var video: Video?
+
+        init(
+            id: UUID = UUID(),
+            name: String,
+            category: Category = .footwork,
+            status: Status = .empty,
+            time: TimeInterval,
+            endTime: TimeInterval? = nil,
+            notes: String = "",
+            isExcluded: Bool = false,
+            createdAt: Date = Date(),
+            updatedAt: Date = Date(),
+            video: Video? = nil
+        ) {
+            self.id = id
+            self.name = name
+            self.category = category
+            self.status = status
+            self.time = time
+            self.endTime = endTime
+            self.notes = notes
+            self.isExcluded = isExcluded
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.video = video
+        }
+    }
+}
+
+// MARK: - V4 (DanceStyle scalar → Style @Model relationship) — current live schema
+
+enum SchemaV4: VersionedSchema {
+    static var versionIdentifier: Schema.Version { Schema.Version(4, 0, 0) }
+    static var models: [any PersistentModel.Type] {
+        [Video.self, Move.self, Style.self]
     }
 }
 
@@ -171,11 +261,11 @@ enum SchemaV3: VersionedSchema {
 
 enum Five67MigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaV1.self, SchemaV2.self, SchemaV3.self]
+        [SchemaV1.self, SchemaV2.self, SchemaV3.self, SchemaV4.self]
     }
 
     static var stages: [MigrationStage] {
-        [v1ToV2, v2ToV3]
+        [v1ToV2, v2ToV3, v3ToV4]
     }
 
     static let v1ToV2 = MigrationStage.lightweight(
@@ -186,5 +276,48 @@ enum Five67MigrationPlan: SchemaMigrationPlan {
     static let v2ToV3 = MigrationStage.lightweight(
         fromVersion: SchemaV2.self,
         toVersion: SchemaV3.self
+    )
+
+    /// Snapshot of `(videoID → V3 raw style)` captured in `willMigrate` and
+    /// consumed in `didMigrate`. The two closures don't share a context, so we
+    /// bridge through this static. Cleared after use. Marked `nonisolated(unsafe)`
+    /// because migrations run on a private actor and SwiftData serializes the
+    /// stages — there is no concurrent access.
+    nonisolated(unsafe) static var v3StyleSnapshot: [UUID: String] = [:]
+
+    static let v3ToV4 = MigrationStage.custom(
+        fromVersion: SchemaV3.self,
+        toVersion: SchemaV4.self,
+        willMigrate: { context in
+            let videos = try context.fetch(FetchDescriptor<SchemaV3.Video>())
+            var map: [UUID: String] = [:]
+            for v in videos {
+                if let raw = v.style?.rawValue {
+                    map[v.id] = raw
+                }
+            }
+            v3StyleSnapshot = map
+        },
+        didMigrate: { context in
+            // 1. Seed the three defaults (idempotent — safe on re-launch too).
+            Style.seedDefaultsIfNeeded(in: context)
+
+            // 2. Re-point every video whose V3 style we captured.
+            let allStyles = try context.fetch(FetchDescriptor<Style>())
+            let stylesByID = Dictionary(uniqueKeysWithValues: allStyles.map { ($0.id, $0) })
+
+            let videos = try context.fetch(FetchDescriptor<Video>())
+            for v in videos {
+                guard
+                    let raw = v3StyleSnapshot[v.id],
+                    let seededID = Style.Default.id(forRawValue: raw),
+                    let style = stylesByID[seededID]
+                else { continue }
+                v.style = style
+            }
+
+            try context.save()
+            v3StyleSnapshot = [:]
+        }
     )
 }

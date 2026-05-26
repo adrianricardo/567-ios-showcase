@@ -1,79 +1,76 @@
 import SwiftUI
 
-/// Persistent bottom bar overlaying both Library and Feed (iOS Photos pattern).
-/// Left pill: Library | Feed segmented tabs.
-/// Right circle: current style filter; tap opens a style picker menu.
+/// Which surface the bottom bar is currently anchored to. Drives the tinted
+/// state of the four icons.
+enum BottomBarActive {
+    case library, feed, style
+}
+
+/// Persistent bottom bar overlaying the feed and its side panes. Four icon
+/// buttons, no labels: Library · Feed · Add Video · Style.
 struct GlobalBottomBar: View {
-    @Binding var selection: AppTab
-    @Bindable var styleStore: StyleStore
+    let active: BottomBarActive
+    let onOpenLibrary: () -> Void
+    let onShowFeed: () -> Void
+    let onAddVideo: () -> Void
+    let onOpenStyles: () -> Void
 
     var body: some View {
-        HStack(alignment: .center, spacing: Spacing.none) {
-            tabPill
-            Spacer(minLength: 0)
-            styleChip
-        }
-        .padding(.horizontal, Spacing.mdPlus)
-    }
-
-    // MARK: - Tab pill
-
-    private var tabPill: some View {
         HStack(spacing: Spacing.xs) {
-            tabButton(.library, label: "Library", systemImage: "photo.stack.fill")
-            tabButton(.feed, label: "Feed", systemImage: "play.rectangle.fill")
+            iconButton(
+                systemName: "photo.stack.fill",
+                accessibilityLabel: "Library",
+                isActive: active == .library,
+                action: onOpenLibrary
+            )
+            iconButton(
+                systemName: "play.rectangle.fill",
+                accessibilityLabel: "Feed",
+                isActive: active == .feed,
+                action: onShowFeed
+            )
+            iconButton(
+                systemName: "plus.circle.fill",
+                accessibilityLabel: "Add video",
+                isActive: false,
+                action: onAddVideo
+            )
+            iconButton(
+                systemName: "slider.horizontal.3",
+                accessibilityLabel: "Styles",
+                isActive: active == .style,
+                action: onOpenStyles
+            )
         }
         .padding(Spacing.xsPlus)
         .liquidGlass(in: Capsule())
         .shadow(color: .black.opacity(0.14), radius: 16, y: 4)
+        .padding(.horizontal, Spacing.mdPlus)
     }
 
-    private func tabButton(_ tab: AppTab, label: String, systemImage: String) -> some View {
-        let isActive = selection == tab
-        return Button {
-            guard selection != tab else { return }
-            selection = tab
+    private func iconButton(
+        systemName: String,
+        accessibilityLabel: String,
+        isActive: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            action()
             Haptics.light()
         } label: {
-            VStack(spacing: Spacing.xs) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 26, weight: .semibold))
-                Text(label)
-                    .font(.system(size: 13, weight: .semibold))
-            }
-            .foregroundStyle(isActive ? Color.accentColor : Color.primary)
-            .frame(width: 104, height: 64)
-            .background(
-                Capsule()
-                    .fill(isActive ? Color.accentColor.opacity(0.16) : Color.clear)
-            )
-            .contentShape(Capsule())
+            Image(systemName: systemName)
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(isActive ? Color.accentColor : Color.primary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 64)
+                .background(
+                    Capsule()
+                        .fill(isActive ? Color.accentColor.opacity(0.16) : Color.clear)
+                )
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(label)
+        .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(isActive ? [.isSelected] : [])
-    }
-
-    // MARK: - Style chip (right circle)
-
-    private var styleChip: some View {
-        Menu {
-            Picker("Style", selection: $styleStore.activeStyle) {
-                Text("All").tag(DanceStyle?.none)
-                ForEach(DanceStyle.allCases) { style in
-                    Text(style.label).tag(DanceStyle?.some(style))
-                }
-            }
-        } label: {
-            Text(styleStore.label)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Color.accentColor)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .frame(width: 76, height: 76)
-                .liquidGlass(in: Circle(), interactive: true)
-                .shadow(color: .black.opacity(0.14), radius: 16, y: 4)
-        }
-        .accessibilityLabel("Style: \(styleStore.label)")
     }
 }

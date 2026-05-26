@@ -21,6 +21,12 @@ struct VideoDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(AppRouter.self) private var router
+
+    @Query(sort: [
+        SortDescriptor(\Style.isDefault, order: .reverse),
+        SortDescriptor(\Style.createdAt, order: .forward)
+    ]) private var allStyles: [Style]
+
     private let logger = Logger(subsystem: "Five67", category: "VideoDetail")
 
     init(
@@ -161,9 +167,9 @@ struct VideoDetailView: View {
     private var videoMenu: some View {
         Menu {
             Picker("Style", selection: styleBinding) {
-                Text("Untagged").tag(DanceStyle?.none)
-                ForEach(DanceStyle.allCases) { style in
-                    Text(style.label).tag(DanceStyle?.some(style))
+                Text("Untagged").tag(UUID?.none)
+                ForEach(allStyles) { style in
+                    Text(style.name).tag(UUID?.some(style.id))
                 }
             }
             Button {
@@ -186,10 +192,15 @@ struct VideoDetailView: View {
         .accessibilityLabel("More")
     }
 
-    private var styleBinding: Binding<DanceStyle?> {
+    /// Picker is bound to the *id* rather than the `Style` itself so SwiftUI
+    /// has a stable, `Hashable` tag value (a `Style` reference would need
+    /// careful tag identity across re-fetches).
+    private var styleBinding: Binding<UUID?> {
         Binding(
-            get: { video.style },
-            set: { video.style = $0 }
+            get: { video.style?.id },
+            set: { newID in
+                video.style = newID.flatMap { id in allStyles.first(where: { $0.id == id }) }
+            }
         )
     }
 

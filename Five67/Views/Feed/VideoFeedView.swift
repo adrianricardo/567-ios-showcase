@@ -16,6 +16,12 @@ struct VideoFeedView: View {
         SortDescriptor(\Video.importedAt, order: .reverse)
     ]) private var allVideos: [Video]
 
+    // Drives the import-time style tag dialog.
+    @Query(sort: [
+        SortDescriptor(\Style.isDefault, order: .reverse),
+        SortDescriptor(\Style.createdAt, order: .forward)
+    ]) private var allStyles: [Style]
+
     @State private var controllers: [UUID: PlaybackController] = [:]
     @State private var activeVideoID: UUID?
     @State private var selectedIndex = 0
@@ -34,7 +40,13 @@ struct VideoFeedView: View {
     // open fraction (0 closed → 1 fully open); the feed parallaxes off to the
     // right as the pane slides in from the left.
     @State private var paneProgress: CGFloat = 0
+    // Style picker pane: symmetric to Library but slides in from the right.
+    // Mutex with `paneProgress` — opening one snaps the other closed.
+    @State private var stylePaneProgress: CGFloat = 0
     @State private var dragAxis: FeedDragAxis?
+    // Once a horizontal drag is locked, this records which pane it's driving so
+    // we don't flip mid-gesture as the user's finger changes direction.
+    @State private var horizontalTarget: HorizontalDragTarget?
     @State private var pendingFeedMove: PendingFeedMove?
 
     // Import-time style tagging. After videos import we prompt to tag them so
@@ -42,12 +54,22 @@ struct VideoFeedView: View {
     @State private var styleTagTargets: [Video] = []
     @State private var showStyleTagPrompt = false
 
+    // Add-video action sheet, presented by the bottom bar's `+` button.
+    @State private var showAddVideoDialog = false
+
     // Videos scoped to the active style mode. The feed and pane share this lens.
     private var videos: [Video] {
         allVideos.filter { styleStore.matches($0) }
     }
 
     private var isPaneOpen: Bool { paneProgress > 0.5 }
+    private var isStylePaneOpen: Bool { stylePaneProgress > 0.5 }
+
+    private var bottomBarActive: BottomBarActive {
+        if isPaneOpen { return .library }
+        if isStylePaneOpen { return .style }
+        return .feed
+    }
 
     // Two-beat coach. Beat 1 teaches the non-obvious axis (swipe = different
     // video). Beat 2 teaches the move tap-zones (left/right thirds of the
@@ -137,8 +159,11 @@ struct VideoFeedView: View {
         GeometryReader { geo in
             ZStack {
                 feedRoot
-                    .offset(x: paneProgress * geo.size.width)
-                    .allowsHitTesting(paneProgress == 0)
+                    // Library opens by pushing feed right; Style opens by
+                    // pushing feed left. They are mutex so only one term is
+                    // ever non-zero.
+                    .offset(x: (paneProgress - stylePaneProgress) * geo.size.width)
+                    .allowsHitTesting(paneProgress == 0 && stylePaneProgress == 0)
 
                 LibraryPaneView(
                     activeVideoID: activeVideoID,
@@ -154,25 +179,24 @@ struct VideoFeedView: View {
                 .allowsHitTesting(paneProgress >= 1)
                 .shadow(color: .black.opacity(0.25 * paneProgress), radius: 18, x: 6)
 
-                // Bottom stack: feed card (when on the feed) directly above the
-                // GlobalBottomBar. They share this VStack's coordinate space so
-                // the card-to-bar gap is just the `Spacing.sm` between them.
+                StylePickerPaneView(
+                    onClose: { settleStylePane(open: false) }
+                )
+                .frame(width: geo.size.width, height: geo.size.height)
+                .offset(x: (1 - stylePaneProgress) * geo.size.width)
+                .allowsHitTesting(stylePaneProgress >= 1)
+                .shadow(color: .black.opacity(0.25 * stylePaneProgress), radius: 18, x: -6)
+
+                // Bottom bar sits flush below the video — no MoveCard above it
+                // in the redesign.
                 VStack(spacing: Spacing.none) {
                     Spacer(minLength: 0)
-
-                    if let video = selectedVideo, !isPaneOpen {
-                        bottomChrome(video: video)
-                            .padding(.horizontal, Spacing.lgPlus)
-                            .padding(.bottom, Spacing.sm)
-                            .offset(x: paneProgress * geo.size.width)
-                            .opacity(coachActive ? 0 : chromeOpacity(height: geo.size.height))
-                            .allowsHitTesting(!coachActive)
-                            .transition(.opacity)
-                    }
-
                     GlobalBottomBar(
-                        selection: tabBinding,
-                        styleStore: styleStore
+                        active: bottomBarActive,
+                        onOpenLibrary: { openLibrary() },
+                        onShowFeed: { showFeed() },
+                        onAddVideo: { showAddVideoDialog = true },
+                        onOpenStyles: { openStyles() }
                     )
                     .padding(.bottom, Spacing.sm)
                 }
@@ -180,24 +204,6 @@ struct VideoFeedView: View {
                 .opacity(coachActive ? 0 : 1)
                 .allowsHitTesting(!coachActive)
                 .animation(.easeInOut(duration: 0.25), value: coachActive)
-                .animation(.snappy(duration: 0.25), value: isPaneOpen)
-
-                // Right rail (loop / edit) lives in the same outer coord space
-                // so its bottom offset is just `bar + gap + card + gap`.
-                if let _ = selectedVideo, !isPaneOpen {
-                    VStack(spacing: Spacing.none) {
-                        Spacer(minLength: 0)
-                        rightRail
-                            .padding(.trailing, Spacing.mdPlus)
-                            .padding(.bottom, rightRailBottomInset)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .ignoresSafeArea(edges: .bottom)
-                    .offset(x: paneProgress * geo.size.width)
-                    .opacity(coachActive ? 0 : chromeOpacity(height: geo.size.height))
-                    .allowsHitTesting(!coachActive)
-                    .animation(.easeInOut(duration: 0.25), value: coachActive)
-                }
             }
             .gesture(feedAndPaneGesture(size: geo.size))
         }
@@ -240,14 +246,29 @@ struct VideoFeedView: View {
             isPresented: $showStyleTagPrompt,
             titleVisibility: .visible
         ) {
-            ForEach(DanceStyle.allCases) { style in
-                Button(style.label) { applyStyleToTargets(style) }
+            ForEach(allStyles) { style in
+                Button(style.name) { applyStyleToTargets(style) }
             }
             Button("Skip", role: .cancel) { styleTagTargets = [] }
         } message: {
             Text("Tagging keeps videos in the right style mode. You can change it later from the editor.")
         }
+        .confirmationDialog(
+            "Add video",
+            isPresented: $showAddVideoDialog,
+            titleVisibility: .visible
+        ) {
+            Button("From Photos") { showPhotosPicker = true }
+            Button("From Files")  { showFilesImporter = true }
+            Button("Cancel", role: .cancel) {}
+        }
         .onAppear {
+            // Belt-and-braces: ensure the three default Styles exist even on a
+            // fresh install (where the V3→V4 migration didn't run because there
+            // was no V3 store), then rehydrate the persisted activeStyle.
+            Style.seedDefaultsIfNeeded(in: modelContext)
+            styleStore.rehydrateIfNeeded(in: modelContext)
+
             syncWindow(autoplay: true)
             maybeAdvanceCoach()
             if router.selectedTab == .library {
@@ -299,9 +320,8 @@ struct VideoFeedView: View {
                 playbackOverlay
 
                 // Top chrome respects the top safe area (sits under the
-                // status bar / dynamic island). Bottom chrome + right rail
-                // live in the outer body so they share coord space with the
-                // GlobalBottomBar — see `body`.
+                // status bar / dynamic island). The GlobalBottomBar lives in
+                // the outer body — see `body`.
                 VStack(spacing: Spacing.none) {
                     topChrome(video: video)
                         .padding(.horizontal, Spacing.lgPlus)
@@ -313,30 +333,6 @@ struct VideoFeedView: View {
                 .allowsHitTesting(!coachActive)
             }
             .contentShape(Rectangle())
-        }
-    }
-
-    // The right rail sits above the bottom chrome card. Bar top is at
-    // `bottomBarTopOffset`, then the card sits above with an `sm` gap,
-    // is roughly `xl5*3` tall, and we leave another `sm` gap above it.
-    private var rightRailBottomInset: CGFloat {
-        Spacing.bottomBarTopOffset + Spacing.sm + 120 + Spacing.sm
-    }
-
-    @ViewBuilder
-    private var rightRail: some View {
-        if let controller = activeController {
-            GlassCluster(spacing: Spacing.lg) {
-                VStack(spacing: Spacing.lg) {
-                    LoopRailButton(controller: controller)
-                    Button {
-                        openEditor()
-                    } label: {
-                        RailIcon(systemName: "slider.horizontal.3")
-                    }
-                    .accessibilityLabel("Edit moves")
-                }
-            }
         }
     }
 
@@ -443,42 +439,48 @@ struct VideoFeedView: View {
     }
 
     private func topChrome(video: Video) -> some View {
-        FeedSegmentRail(
-            moves: activeMoves,
-            activeMoveID: activeMoveID,
-            currentTime: activeController?.currentTime ?? 0,
-            duration: effectiveDuration(for: video),
-            onSelect: { move in play(move) }
-        )
+        VStack(spacing: Spacing.smPlus) {
+            FeedSegmentRail(
+                moves: activeMoves,
+                activeMoveID: activeMoveID,
+                currentTime: activeController?.currentTime ?? 0,
+                duration: effectiveDuration(for: video),
+                onSelect: { move in play(move) }
+            )
+
+            HStack(spacing: Spacing.md) {
+                Text(video.displayName)
+                    .font(.title2.weight(.heavy))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .shadow(color: .black.opacity(0.45), radius: 6, y: 1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                topActionCluster
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var topActionCluster: some View {
+        if let controller = activeController {
+            GlassCluster(spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
+                    LoopRailButton(controller: controller)
+                    Button {
+                        openEditor()
+                    } label: {
+                        RailIcon(systemName: "pencil")
+                    }
+                    .accessibilityLabel("Edit moves")
+                }
+            }
+        }
     }
 
     private var emptyStateTopBar: some View {
         EmptyView()
-    }
-
-    private var tabBinding: Binding<AppTab> {
-        Binding(
-            get: { router.selectedTab },
-            set: { router.selectedTab = $0 }
-        )
-    }
-
-    private func bottomChrome(video: Video) -> some View {
-        VStack(spacing: Spacing.lg) {
-            if let activeMove {
-                MoveCard(
-                    move: activeMove,
-                    index: activeMoveIndex,
-                    total: activeMoves.count,
-                    videoDate: video.recordedAt ?? video.importedAt
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            } else {
-                DiscoveryHintCard(duration: effectiveDuration(for: video), moveCount: activeMoves.count)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .animation(.snappy(duration: 0.28, extraBounce: 0.03), value: activeMoveID)
     }
 
     private var emptyState: some View {
@@ -683,26 +685,41 @@ struct VideoFeedView: View {
     }
 
     // One gesture drives both axes. We lock the axis on the first significant
-    // movement: vertical scrubs between videos (feed), horizontal opens/closes
-    // the Library pane. Locking avoids the two competing for the same drag.
+    // movement: vertical scrubs between videos (feed); horizontal opens/closes
+    // a pane. Horizontal target (library vs. style) is chosen on first lock:
+    //   - if a pane is already open, that pane is the target (closing it)
+    //   - else direction picks: drag right → Library (from left), drag left → Style (from right)
     private func feedAndPaneGesture(size: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 14)
             .onChanged { value in
                 if dragAxis == nil {
                     dragAxis = abs(value.translation.width) >= abs(value.translation.height)
                         ? .horizontal : .vertical
-                    // Pause the underlying feed the moment a pane swipe begins.
-                    if dragAxis == .horizontal, !isPaneOpen {
-                        activeController?.pause()
+                    if dragAxis == .horizontal {
+                        horizontalTarget = pickHorizontalTarget(translation: value.translation.width)
+                        // Pause the underlying feed the moment a pane swipe begins.
+                        if !isPaneOpen, !isStylePaneOpen {
+                            activeController?.pause()
+                        }
                     }
                 }
                 switch dragAxis {
                 case .horizontal:
-                    let base: CGFloat = isPaneOpen ? 1 : 0
                     let delta = value.translation.width / max(size.width, 1)
-                    paneProgress = min(1, max(0, base + delta))
+                    switch horizontalTarget {
+                    case .library:
+                        let base: CGFloat = isPaneOpen ? 1 : 0
+                        paneProgress = min(1, max(0, base + delta))
+                    case .style:
+                        // Style pane opens with leftward drag (negative delta)
+                        // and closes with rightward drag.
+                        let base: CGFloat = isStylePaneOpen ? 1 : 0
+                        stylePaneProgress = min(1, max(0, base - delta))
+                    case .none:
+                        break
+                    }
                 case .vertical:
-                    guard !isPaneOpen else { return }
+                    guard !isPaneOpen, !isStylePaneOpen else { return }
                     dragOffset = value.translation.height
                     startNeighborPlayback()
                 case .none:
@@ -712,16 +729,35 @@ struct VideoFeedView: View {
             .onEnded { value in
                 switch dragAxis {
                 case .horizontal:
-                    let base: CGFloat = isPaneOpen ? 1 : 0
-                    let predicted = base + value.predictedEndTranslation.width / max(size.width, 1)
-                    settlePane(open: predicted > 0.5)
+                    let predictedDelta = value.predictedEndTranslation.width / max(size.width, 1)
+                    switch horizontalTarget {
+                    case .library:
+                        let base: CGFloat = isPaneOpen ? 1 : 0
+                        settlePane(open: base + predictedDelta > 0.5)
+                    case .style:
+                        let base: CGFloat = isStylePaneOpen ? 1 : 0
+                        settleStylePane(open: base - predictedDelta > 0.5)
+                    case .none:
+                        break
+                    }
                 case .vertical:
-                    if !isPaneOpen { endVerticalSwipe(value: value, height: size.height) }
+                    if !isPaneOpen, !isStylePaneOpen {
+                        endVerticalSwipe(value: value, height: size.height)
+                    }
                 case .none:
                     break
                 }
                 dragAxis = nil
+                horizontalTarget = nil
             }
+    }
+
+    /// Decide which pane a horizontal drag is acting on. Open panes always
+    /// "win" — a drag while a pane is open is interpreted as closing it.
+    private func pickHorizontalTarget(translation: CGFloat) -> HorizontalDragTarget {
+        if isPaneOpen      { return .library }
+        if isStylePaneOpen { return .style }
+        return translation >= 0 ? .library : .style
     }
 
     private func endVerticalSwipe(value: DragGesture.Value, height: CGFloat) {
@@ -737,10 +773,26 @@ struct VideoFeedView: View {
         }
     }
 
-    // MARK: - Library pane
+    // MARK: - Panes (Library left, Style right) — mutex
 
-    private func openPane() {
+    /// Bottom-bar "Library" button: ensure the left pane is open, the right
+    /// pane is closed. Closes the Style pane first if needed.
+    private func openLibrary() {
+        if isStylePaneOpen { settleStylePane(open: false) }
         settlePane(open: true)
+    }
+
+    /// Bottom-bar "Style" button: ensure the right pane is open, the left
+    /// pane is closed.
+    private func openStyles() {
+        if isPaneOpen { settlePane(open: false) }
+        settleStylePane(open: true)
+    }
+
+    /// Bottom-bar "Feed" button: close any open pane and resume playback.
+    private func showFeed() {
+        if isPaneOpen      { settlePane(open: false) }
+        if isStylePaneOpen { settleStylePane(open: false) }
     }
 
     private func settlePane(open: Bool) {
@@ -753,7 +805,19 @@ struct VideoFeedView: View {
         }
         if open {
             activeController?.pause()
-        } else {
+        } else if !isStylePaneOpen {
+            resumeFeedAfterPane()
+        }
+        Haptics.light()
+    }
+
+    private func settleStylePane(open: Bool) {
+        withAnimation(.snappy(duration: 0.34, extraBounce: 0.02)) {
+            stylePaneProgress = open ? 1 : 0
+        }
+        if open {
+            activeController?.pause()
+        } else if !isPaneOpen {
             resumeFeedAfterPane()
         }
         Haptics.light()
@@ -803,7 +867,7 @@ struct VideoFeedView: View {
         showDetail = true
     }
 
-    private func applyStyleToTargets(_ style: DanceStyle) {
+    private func applyStyleToTargets(_ style: Style) {
         for video in styleTagTargets { video.style = style }
         styleTagTargets = []
         Haptics.success()
@@ -1084,6 +1148,7 @@ struct VideoFeedView: View {
 }
 
 private enum FeedDragAxis { case horizontal, vertical }
+private enum HorizontalDragTarget { case library, style }
 
 private struct PendingFeedMove {
     let videoID: UUID
@@ -1175,58 +1240,4 @@ private struct FeedSegmentRail: View {
     }
 }
 
-private struct MoveCard: View {
-    let move: Move
-    let index: Int
-    let total: Int
-    let videoDate: Date
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("Move \(index + 1) of \(max(total, 1))")
-                .font(.caption.weight(.bold))
-                .tracking(0.8)
-                .foregroundStyle(.cyan.opacity(0.9))
-            Text(move.name.isEmpty ? "Untitled move" : move.name)
-                .font(.title2.weight(.heavy))
-                .foregroundStyle(.white)
-                .lineLimit(2)
-            Text(videoDate.formatted(date: .long, time: .omitted))
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.66))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Spacing.lg)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(.white.opacity(0.16)))
-    }
-}
-
-private struct DiscoveryHintCard: View {
-    let duration: TimeInterval
-    let moveCount: Int
-
-    var body: some View {
-        HStack(spacing: Spacing.md) {
-            Image(systemName: "hand.tap.fill")
-                .font(.title3.weight(.bold))
-                .foregroundStyle(.black)
-                .frame(width: 42, height: 42)
-                .background(.white, in: Circle())
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text(moveCount == 0 ? "Tap right to skim" : "Tap through moves")
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(.white)
-                Text("Swipe vertically between videos · long-press for actions · \(formatTime(duration))")
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.64))
-                    .lineLimit(2)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(Spacing.lg)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(.white.opacity(0.14)))
-    }
-}
 
