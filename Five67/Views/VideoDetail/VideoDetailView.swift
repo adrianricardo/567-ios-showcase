@@ -22,10 +22,7 @@ struct VideoDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppRouter.self) private var router
 
-    @Query(sort: [
-        SortDescriptor(\Style.isDefault, order: .reverse),
-        SortDescriptor(\Style.createdAt, order: .forward)
-    ]) private var allStyles: [Style]
+    @Query(sort: \Style.createdAt, order: .forward) private var allStyles: [Style]
 
     private let logger = Logger(subsystem: "Five67", category: "VideoDetail")
 
@@ -49,60 +46,51 @@ struct VideoDetailView: View {
     private var hasMoves: Bool { !sortedMoves.isEmpty }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            contentList
-                .environment(controller)
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    heroSection
+        contentList
+            .environment(controller)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                heroSection
+            }
+            .onChange(of: controller.currentTime) { _, t in
+                advanceActiveMove(currentTime: t)
+            }
+            .onChange(of: video.moves.count) {
+                refreshSortedMoves()
+            }
+            .onAppear {
+                refreshSortedMoves()
+                // Land the editor where the feed left off, when handed a
+                // start time. Guarded so we only honor it on the first
+                // appearance (re-appearances after dismiss don't re-seek).
+                if !didApplyStartTime, let t = startTime, t.isFinite, t > 0 {
+                    controller.seek(to: t)
                 }
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if let m = activeMove {
-                        NowPlayingStripView(move: m) {
-                            withAnimation { proxy.scrollTo(m.id, anchor: .center) }
-                        }
-                    }
+                didApplyStartTime = true
+                controller.play()
+            }
+            .navigationBarBackButtonHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
+            .toolbar(.hidden, for: .tabBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .sheet(isPresented: $showRename) {
+                RenameSheet(
+                    title: "Rename Video",
+                    isPresented: $showRename,
+                    initial: video.displayName
+                ) { newName in
+                    video.displayName = newName
                 }
-                .onChange(of: controller.currentTime) { _, t in
-                    advanceActiveMove(currentTime: t)
+            }
+            .confirmationDialog(
+                "Delete \"\(video.displayName)\"?",
+                isPresented: $showDeleteConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete Video & All Moves", role: .destructive) {
+                    deleteCurrentVideo()
                 }
-                .onChange(of: video.moves.count) {
-                    refreshSortedMoves()
-                }
-                .onAppear {
-                    refreshSortedMoves()
-                    // Land the editor where the feed left off, when handed a
-                    // start time. Guarded so we only honor it on the first
-                    // appearance (re-appearances after dismiss don't re-seek).
-                    if !didApplyStartTime, let t = startTime, t.isFinite, t > 0 {
-                        controller.seek(to: t)
-                    }
-                    didApplyStartTime = true
-                    controller.play()
-                }
-                .navigationBarBackButtonHidden(true)
-                .toolbar(.hidden, for: .navigationBar)
-                .toolbar(.hidden, for: .tabBar)
-                .toolbarColorScheme(.dark, for: .navigationBar)
-                .sheet(isPresented: $showRename) {
-                    RenameSheet(
-                        title: "Rename Video",
-                        isPresented: $showRename,
-                        initial: video.displayName
-                    ) { newName in
-                        video.displayName = newName
-                    }
-                }
-                .confirmationDialog(
-                    "Delete \"\(video.displayName)\"?",
-                    isPresented: $showDeleteConfirm,
-                    titleVisibility: .visible
-                ) {
-                    Button("Delete Video & All Moves", role: .destructive) {
-                        deleteCurrentVideo()
-                    }
-                    Button("Cancel", role: .cancel) {}
-                }
-        }
+                Button("Cancel", role: .cancel) {}
+            }
     }
 
     // MARK: - Sections
@@ -118,6 +106,7 @@ struct VideoDetailView: View {
                 showsPlaceholderWhenEmpty: true
             ) {
                 VStack(spacing: Spacing.mdPlus) {
+                    videoMenu
                     MuteRailButton()
                     LoopRailButton(controller: controller)
                     SplitRailButton(controller: controller, onSplit: split)
@@ -128,7 +117,7 @@ struct VideoDetailView: View {
 
     private var topBar: some View {
         HStack(spacing: Spacing.sm) {
-            Button { dismiss() } label: {
+            Button { finishEditing() } label: {
                 Image(systemName: "chevron.left")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.white)
@@ -144,20 +133,10 @@ struct VideoDetailView: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
 
-            videoMenu
+            Spacer(minLength: 0)
 
-            if hasMoves {
-                Button {
-                    finishEditing()
-                } label: {
-                    Text("Done")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.accentColor)
-                        .padding(.horizontal, Spacing.md)
-                        .frame(height: Spacing.touchTarget)
-                }
-                .accessibilityLabel("Done editing")
-            }
+            // Balance the leading back button so the title stays centered.
+            Color.clear.frame(width: Spacing.touchTarget, height: Spacing.touchTarget)
         }
         .padding(.horizontal, Spacing.sm)
         .frame(height: Spacing.touchTarget)
@@ -167,7 +146,6 @@ struct VideoDetailView: View {
     private var videoMenu: some View {
         Menu {
             Picker("Style", selection: styleBinding) {
-                Text("Untagged").tag(UUID?.none)
                 ForEach(allStyles) { style in
                     Text(style.name).tag(UUID?.some(style.id))
                 }
@@ -184,10 +162,7 @@ struct VideoDetailView: View {
                 Label("Delete Video", systemImage: "trash")
             }
         } label: {
-            Image(systemName: "ellipsis.circle")
-                .font(.title3)
-                .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
+            RailIcon(systemName: "ellipsis")
         }
         .accessibilityLabel("More")
     }
@@ -206,23 +181,58 @@ struct VideoDetailView: View {
 
     @ViewBuilder
     private var contentList: some View {
-        List {
-            ForEach(sortedMoves) { move in
-                MoveRowView(
-                    move: move,
-                    isActive: activeMoveID == move.id,
-                    onTap: { activateMove(move) },
-                    onCycleStatus: { cycleStatus(move) },
-                    onDelete: { deleteMove(move) },
-                    onRename: { newName in renameMove(move, to: newName) },
-                    onExclude: { toggleExclude(move) }
-                )
-                .id(move.id)
-                .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets())
+        if hasMoves {
+            List {
+                ForEach(sortedMoves) { move in
+                    MoveRowView(
+                        move: move,
+                        isActive: activeMoveID == move.id,
+                        onTap: { activateMove(move) },
+                        onDelete: { deleteMove(move) },
+                        onRename: { newName in renameMove(move, to: newName) },
+                        onExclude: { toggleExclude(move) }
+                    )
+                    .id(move.id)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets())
+                }
             }
+            .listStyle(.plain)
+        } else {
+            emptyMovesHint
         }
-        .listStyle(.plain)
+    }
+
+    /// Inline coach shown when the video has no moves yet. The scissor icon
+    /// is a real Button that calls `split()` so users can tap either the rail
+    /// button above or this hint copy — whichever they reached for first.
+    private var emptyMovesHint: some View {
+        VStack {
+            Spacer(minLength: 0)
+            HStack(spacing: Spacing.smPlus) {
+                Text("Press")
+                Button {
+                    split()
+                } label: {
+                    RailIcon(systemName: "scissors")
+                }
+                .disabled(controller.duration == 0)
+                .accessibilityLabel("Split")
+                Text("to add your first move")
+            }
+            .font(.headline.weight(.semibold))
+            .foregroundStyle(.white.opacity(0.85))
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, Spacing.xl2)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // The feed's GlobalBottomBar overlays the bottom ~92pt of this view
+        // (the editor is pushed inside the feed's NavigationStack). Balance
+        // the centering by reserving that area at the bottom so the hint
+        // sits in the middle of the *visible* region, not the full frame.
+        .padding(.bottom, Spacing.bottomBarTopOffset)
+        .background(Color.black)
     }
 
     // MARK: - Actions
@@ -305,12 +315,6 @@ struct VideoDetailView: View {
             guard let range = playableRange(for: m) else { return }
             controller.setActiveRange(start: range.start, end: range.end)
         }
-    }
-
-    private func cycleStatus(_ move: Move) {
-        move.status = move.status.next
-        move.updatedAt = Date()
-        Haptics.select()
     }
 
     private func deleteMove(_ move: Move) {

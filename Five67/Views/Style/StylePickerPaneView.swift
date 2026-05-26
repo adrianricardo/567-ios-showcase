@@ -11,10 +11,7 @@ struct StylePickerPaneView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(StyleStore.self) private var styleStore
 
-    @Query(sort: [
-        SortDescriptor(\Style.isDefault, order: .reverse),
-        SortDescriptor(\Style.createdAt, order: .forward)
-    ])
+    @Query(sort: \Style.createdAt, order: .forward)
     private var styles: [Style]
 
     @State private var renameTarget: Style?

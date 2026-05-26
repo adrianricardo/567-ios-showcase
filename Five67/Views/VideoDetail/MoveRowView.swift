@@ -4,7 +4,6 @@ struct MoveRowView: View {
     let move: Move
     let isActive: Bool
     let onTap: () -> Void
-    let onCycleStatus: () -> Void
     let onDelete: () -> Void
     let onRename: (String) -> Void
     let onExclude: () -> Void
@@ -22,26 +21,15 @@ struct MoveRowView: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: Spacing.md) {
-                if move.isExcluded {
-                    Image(systemName: "eye.slash")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .frame(width: Spacing.lg)
-                        .padding(.leading, Spacing.lg)
-                } else {
-                    StatusDot(status: move.status)
-                        .padding(.leading, Spacing.lg)
-                }
+                Text(displayName)
+                    .font(.body)
+                    .foregroundStyle(move.isExcluded ? .tertiary : .primary)
+                    .lineLimit(1)
+                    .padding(.leading, Spacing.lg)
 
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text(displayName)
-                        .font(.body)
-                        .foregroundStyle(move.isExcluded ? .tertiary : .primary)
-                        .lineLimit(1)
-                    Text(move.rangeLabel)
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.tertiary)
-                }
+                Text(move.durationLabel)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.tertiary)
 
                 Spacer(minLength: Spacing.sm)
 
@@ -49,19 +37,21 @@ struct MoveRowView: View {
                     Button {
                         showRename = true
                     } label: {
-                        Label("Add name", systemImage: "plus")
-                            .font(.caption.weight(.semibold))
-                            .labelStyle(.titleAndIcon)
+                        Text("Add name")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, Spacing.md)
+                            .padding(.vertical, Spacing.xs)
+                            .background(Capsule().fill(Color.accentColor))
                     }
-                    .buttonStyle(.borderless)
-                    .tint(.accentColor)
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.trailing, Spacing.lg)
-            .frame(minHeight: Spacing.rowMinHeight)
+            .frame(minHeight: Spacing.rowMinHeight + Spacing.smPlus)
             .background(
                 isActive && !move.isExcluded
-                    ? Color.accentColor.opacity(0.07)
+                    ? Color.white.opacity(0.05)
                     : Color(.systemBackground)
             )
             .contentShape(Rectangle())
@@ -88,11 +78,6 @@ struct MoveRowView: View {
             Button("Rename", systemImage: "pencil") {
                 showRename = true
             }
-            if !move.isExcluded {
-                Button(move.status.next.displayName, systemImage: statusIcon(for: move.status.next)) {
-                    onCycleStatus()
-                }
-            }
             Divider()
             Button(
                 move.isExcluded ? "Include" : "Exclude",
@@ -112,14 +97,6 @@ struct MoveRowView: View {
                 initial: move.name,
                 onSave: onRename
             )
-        }
-    }
-
-    private func statusIcon(for status: Status) -> String {
-        switch status {
-        case .empty:    return "circle.dotted"
-        case .stuck:    return "exclamationmark.circle"
-        case .mastered: return "checkmark.circle.fill"
         }
     }
 }

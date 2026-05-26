@@ -78,10 +78,21 @@ import OSLog
 
     func play() {
         prepareAudioSession()
+        // If the player is parked at the end of the item (natural end-of-
+        // playback), `player.play()` is a no-op. Rewind to the active range
+        // start so a tap on the play affordance restarts the video instead of
+        // doing nothing.
+        rewindIfAtEnd()
         player.play()
         if let error = player.currentItem?.error ?? player.error {
             logger.error("Playback error while starting: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    private func rewindIfAtEnd() {
+        guard let totalDuration = currentPlayableDuration(), totalDuration > 0 else { return }
+        guard currentTime >= totalDuration - 0.1 else { return }
+        seek(to: activeRangeStart ?? 0)
     }
 
     func playRange(start: TimeInterval, end: TimeInterval?) {

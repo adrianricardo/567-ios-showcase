@@ -17,10 +17,7 @@ struct VideoFeedView: View {
     ]) private var allVideos: [Video]
 
     // Drives the import-time style tag dialog.
-    @Query(sort: [
-        SortDescriptor(\Style.isDefault, order: .reverse),
-        SortDescriptor(\Style.createdAt, order: .forward)
-    ]) private var allStyles: [Style]
+    @Query(sort: \Style.createdAt, order: .forward) private var allStyles: [Style]
 
     @State private var controllers: [UUID: PlaybackController] = [:]
     @State private var activeVideoID: UUID?
@@ -187,10 +184,17 @@ struct VideoFeedView: View {
                 .allowsHitTesting(stylePaneProgress >= 1)
                 .shadow(color: .black.opacity(0.25 * stylePaneProgress), radius: 18, x: -6)
 
-                // Bottom bar sits flush below the video — no MoveCard above it
-                // in the redesign.
+                // Bottom bar sits flush below the video. The no-moves CTA, when
+                // present, slots in just above the bar in the same stack so
+                // the bar pushes it up — no safe-area math at the call site.
                 VStack(spacing: Spacing.none) {
                     Spacer(minLength: 0)
+                    if shouldShowNoMovesCTA {
+                        noMovesCTACard
+                            .padding(.horizontal, Spacing.lgPlus)
+                            .padding(.bottom, Spacing.md)
+                            .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                    }
                     GlobalBottomBar(
                         active: bottomBarActive,
                         onOpenLibrary: { openLibrary() },
@@ -201,9 +205,11 @@ struct VideoFeedView: View {
                     .padding(.bottom, Spacing.sm)
                 }
                 .ignoresSafeArea(edges: .bottom)
-                .opacity(coachActive ? 0 : 1)
-                .allowsHitTesting(!coachActive)
+                .opacity(coachActive || showDetail ? 0 : 1)
+                .allowsHitTesting(!coachActive && !showDetail)
                 .animation(.easeInOut(duration: 0.25), value: coachActive)
+                .animation(.easeInOut(duration: 0.2), value: showDetail)
+                .animation(.snappy(duration: 0.28), value: shouldShowNoMovesCTA)
             }
             .gesture(feedAndPaneGesture(size: geo.size))
         }
@@ -336,6 +342,57 @@ struct VideoFeedView: View {
         }
     }
 
+    /// Empty-state CTA card shown above the GlobalBottomBar when the current
+    /// source has no marked moves yet. Lives in the outer body's bottom stack
+    /// so the bar pushes it up naturally — no manual safe-area math.
+    @ViewBuilder
+    private var noMovesCTACard: some View {
+        VStack(spacing: Spacing.smPlus) {
+            Text("No moves yet")
+                .font(.title3.weight(.heavy))
+                .foregroundStyle(.white)
+            Text("You haven't added any moves to this video.")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.white.opacity(0.78))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, Spacing.md)
+
+            Button {
+                openEditor()
+            } label: {
+                Label("Add moves", systemImage: "plus.circle.fill")
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: Spacing.primaryButtonHeight)
+                    .background(.white, in: Capsule())
+            }
+            .padding(.top, Spacing.xs)
+        }
+        .padding(.vertical, Spacing.lg)
+        .padding(.horizontal, Spacing.lg)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.black.opacity(0.5))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(.white.opacity(0.12))
+                )
+        )
+        .shadow(color: .black.opacity(0.35), radius: 18, y: 8)
+    }
+
+    private var shouldShowNoMovesCTA: Bool {
+        // Suppress while the editor is pushed (it lives inside the feed's
+        // NavigationStack, but this VStack is in the outer body and would
+        // otherwise leak through over the editor).
+        guard !showDetail else { return false }
+        // Also suppress while a side pane is on screen — the pane is the
+        // visible surface; the CTA belongs to the feed view underneath.
+        guard !isPaneOpen, !isStylePaneOpen else { return false }
+        return selectedVideo != nil && activeMoves.isEmpty
+    }
+
     private func videoStack(height: CGFloat, width: CGFloat) -> some View {
         ZStack {
             ForEach(windowIndices, id: \.self) { index in
@@ -449,7 +506,7 @@ struct VideoFeedView: View {
             )
 
             HStack(spacing: Spacing.md) {
-                Text(video.displayName)
+                Text(feedTitle(for: video))
                     .font(.title2.weight(.heavy))
                     .foregroundStyle(.white)
                     .lineLimit(1)
@@ -465,15 +522,16 @@ struct VideoFeedView: View {
     @ViewBuilder
     private var topActionCluster: some View {
         if let controller = activeController {
+            let noMoves = activeMoves.isEmpty
             GlassCluster(spacing: Spacing.sm) {
                 HStack(spacing: Spacing.sm) {
                     LoopRailButton(controller: controller)
                     Button {
                         openEditor()
                     } label: {
-                        RailIcon(systemName: "pencil")
+                        RailIcon(systemName: noMoves ? "plus" : "pencil")
                     }
-                    .accessibilityLabel("Edit moves")
+                    .accessibilityLabel(noMoves ? "Add moves" : "Edit moves")
                 }
             }
         }
@@ -1057,6 +1115,19 @@ struct VideoFeedView: View {
             activeMoveID = current.id
             activeController?.setActiveRange(start: current.time, end: current.endTime)
         }
+    }
+
+    /// Feed title rules:
+    /// - no moves → date the video was recorded (fallback: imported)
+    /// - moves exist, active move has a name → that name
+    /// - moves exist, active move is unnamed (or none picked yet) → "Unnamed"
+    private func feedTitle(for video: Video) -> String {
+        if activeMoves.isEmpty {
+            let date = video.recordedAt ?? video.importedAt
+            return date.formatted(date: .long, time: .omitted)
+        }
+        let name = activeMove?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return name.isEmpty ? "Unnamed" : name
     }
 
     private func effectiveDuration(for video: Video?) -> TimeInterval {

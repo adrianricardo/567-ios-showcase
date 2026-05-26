@@ -92,8 +92,8 @@ struct LibraryPaneView: View {
 
     var body: some View {
         VStack(spacing: Spacing.none) {
-            header
             tabPicker
+                .padding(.top, Spacing.mdPlus)
             searchField
             content
         }
@@ -123,37 +123,6 @@ struct LibraryPaneView: View {
         }
     }
 
-    // MARK: - Header
-
-    private var header: some View {
-        HStack(spacing: Spacing.mdPlus) {
-            Spacer(minLength: 0)
-
-            Menu {
-                Button {
-                    onImportPhotos()
-                } label: {
-                    Label("From Photos", systemImage: "photo.on.rectangle")
-                }
-                Button {
-                    onImportFiles()
-                } label: {
-                    Label("From Files", systemImage: "folder")
-                }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .frame(width: Spacing.touchTarget, height: Spacing.touchTarget)
-                    .background(Color(.tertiarySystemFill), in: Circle())
-            }
-            .accessibilityLabel("Add video")
-        }
-        .padding(.horizontal, Spacing.lg)
-        .padding(.top, Spacing.mdPlus)
-        .padding(.bottom, Spacing.smPlus)
-    }
-
     private var tabPicker: some View {
         Picker("View", selection: $tab) {
             ForEach(PaneTab.allCases) { t in
@@ -172,6 +141,9 @@ struct LibraryPaneView: View {
             TextField("Search moves and videos", text: $search)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+                .onChange(of: search) { _, new in
+                    if new.count > 80 { search = String(new.prefix(80)) }
+                }
             if !search.isEmpty {
                 Button {
                     search = ""
@@ -211,7 +183,6 @@ struct LibraryPaneView: View {
                             move: move,
                             isActive: activeMoveID == move.id,
                             onTap: { onSelectMove(move) },
-                            onCycleStatus: { cycleStatus(move) },
                             onDelete: { deleteMove(move) },
                             onRename: { newName in rename(move, to: newName) },
                             onExclude: { toggleExclude(move) }
@@ -333,12 +304,6 @@ struct LibraryPaneView: View {
 
     private func groupTitle(for video: Video) -> String {
         (video.recordedAt ?? video.importedAt).formatted(date: .long, time: .omitted)
-    }
-
-    private func cycleStatus(_ move: Move) {
-        move.status = move.status.next
-        move.updatedAt = Date()
-        Haptics.select()
     }
 
     private func rename(_ move: Move, to name: String) {

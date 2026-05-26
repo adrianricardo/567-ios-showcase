@@ -4,6 +4,7 @@ struct RenameSheet: View {
     let title: String
     @Binding var isPresented: Bool
     let initial: String
+    var characterLimit: Int = 60
     let onSave: (String) -> Void
 
     @State private var text = ""
@@ -15,6 +16,11 @@ struct RenameSheet: View {
                 TextField("Name", text: $text)
                     .focused($focused)
                     .autocorrectionDisabled()
+                    .onChange(of: text) { _, new in
+                        if new.count > characterLimit {
+                            text = String(new.prefix(characterLimit))
+                        }
+                    }
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
@@ -26,7 +32,7 @@ struct RenameSheet: View {
                     Button("Save") {
                         let trimmed = text.trimmingCharacters(in: .whitespaces)
                         guard !trimmed.isEmpty else { return }
-                        onSave(trimmed)
+                        onSave(String(trimmed.prefix(characterLimit)))
                         isPresented = false
                         Haptics.success()
                     }
@@ -37,7 +43,7 @@ struct RenameSheet: View {
         .presentationDetents([.height(180)])
         .presentationDragIndicator(.visible)
         .onAppear {
-            text = initial
+            text = String(initial.prefix(characterLimit))
             focused = true
         }
     }

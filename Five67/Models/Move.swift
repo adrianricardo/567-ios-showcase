@@ -55,6 +55,11 @@ extension Move {
         return formatTime(time)
     }
 
+    var durationLabel: String {
+        guard let seconds = durationSeconds else { return "—" }
+        return String(format: "%.1fs", seconds)
+    }
+
     var isNamed: Bool { !name.isEmpty && !isExcluded }
 }
 
