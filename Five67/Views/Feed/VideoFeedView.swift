@@ -184,17 +184,12 @@ struct VideoFeedView: View {
                 .allowsHitTesting(stylePaneProgress >= 1)
                 .shadow(color: .black.opacity(0.25 * stylePaneProgress), radius: 18, x: -6)
 
-                // Bottom bar sits flush below the video. The no-moves CTA, when
-                // present, slots in just above the bar in the same stack so
-                // the bar pushes it up — no safe-area math at the call site.
+                // Bottom bar is global chrome — it does not ride with the
+                // swiping video. The per-video "no moves yet" CTA lives
+                // inside the card chrome (see cardChromeStack) so it travels
+                // with its video.
                 VStack(spacing: Spacing.none) {
                     Spacer(minLength: 0)
-                    if shouldShowNoMovesCTA {
-                        noMovesCTACard
-                            .padding(.horizontal, Spacing.lgPlus)
-                            .padding(.bottom, Spacing.md)
-                            .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                    }
                     GlobalBottomBar(
                         active: bottomBarActive,
                         onOpenLibrary: { openLibrary() },
@@ -209,7 +204,6 @@ struct VideoFeedView: View {
                 .allowsHitTesting(!coachActive && !showDetail)
                 .animation(.easeInOut(duration: 0.25), value: coachActive)
                 .animation(.easeInOut(duration: 0.2), value: showDetail)
-                .animation(.snappy(duration: 0.28), value: shouldShowNoMovesCTA)
             }
             .gesture(feedAndPaneGesture(size: geo.size))
         }
@@ -319,24 +313,8 @@ struct VideoFeedView: View {
         GeometryReader { geo in
             let fullHeight = geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom
             ZStack {
-                videoStack(height: fullHeight, width: geo.size.width)
-
+                videoStack(height: fullHeight, width: geo.size.width, topInset: geo.safeAreaInsets.top)
                 tapZones
-
-                playbackOverlay
-
-                // Top chrome respects the top safe area (sits under the
-                // status bar / dynamic island). The GlobalBottomBar lives in
-                // the outer body — see `body`.
-                VStack(spacing: Spacing.none) {
-                    topChrome(video: video)
-                        .padding(.horizontal, Spacing.lgPlus)
-                        .padding(.top, Spacing.smPlus)
-                    Spacer(minLength: 0)
-                }
-                .opacity(coachActive ? 0 : chromeOpacity(height: geo.size.height))
-                .animation(.easeInOut(duration: 0.25), value: coachActive)
-                .allowsHitTesting(!coachActive)
             }
             .contentShape(Rectangle())
         }
@@ -382,28 +360,38 @@ struct VideoFeedView: View {
         .shadow(color: .black.opacity(0.35), radius: 18, y: 8)
     }
 
-    private var shouldShowNoMovesCTA: Bool {
+    private func shouldShowNoMovesCTA(for video: Video) -> Bool {
         // Suppress while the editor is pushed (it lives inside the feed's
-        // NavigationStack, but this VStack is in the outer body and would
-        // otherwise leak through over the editor).
+        // NavigationStack, but the CTA lives inside the per-card chrome and
+        // would otherwise leak through over the editor).
         guard !showDetail else { return false }
         // Also suppress while a side pane is on screen — the pane is the
         // visible surface; the CTA belongs to the feed view underneath.
         guard !isPaneOpen, !isStylePaneOpen else { return false }
-        return selectedVideo != nil && activeMoves.isEmpty
+        return video.movesSorted.isEmpty
     }
 
-    private func videoStack(height: CGFloat, width: CGFloat) -> some View {
+    private func videoStack(height: CGFloat, width: CGFloat, topInset: CGFloat) -> some View {
         ZStack {
             ForEach(windowIndices, id: \.self) { index in
                 let video = videos[index]
-                Group {
+                let isActive = index == selectedIndex
+                ZStack {
                     if let controller = controllers[video.id] {
                         VideoPlayerSurface(controller: controller, videoGravity: .resizeAspectFill)
                             .overlay(ambientGradient)
                     } else {
                         Color.black
                     }
+
+                    // Per-card chrome lives inside the card, so it travels in
+                    // and out of view with its video during a swipe — incoming
+                    // chrome enters with the incoming card, not after settle.
+                    cardChromeStack(for: video, isActive: isActive, fullHeight: height, topInset: topInset)
+                        .opacity(coachActive ? 0 : perVideoChromeOpacity)
+                        .animation(.easeInOut(duration: 0.25), value: coachActive)
+                        .animation(.easeOut(duration: 0.15), value: dragOffset == 0)
+                        .allowsHitTesting(isActive && !coachActive)
                 }
                 .frame(width: width, height: height)
                 .offset(y: CGFloat(index - selectedIndex) * height + bandedOffset(height: height))
@@ -411,6 +399,39 @@ struct VideoFeedView: View {
         }
         .ignoresSafeArea()
         .background(Color.black)
+    }
+
+    // Composite per-card chrome: top rail + title (+ Loop/Edit when active),
+    // center playback overlay (active only), and bottom no-moves CTA (per
+    // video). Sized to the full card so the top padding lands below the
+    // status bar / dynamic island and the bottom padding clears the
+    // GlobalBottomBar.
+    @ViewBuilder
+    private func cardChromeStack(for video: Video, isActive: Bool, fullHeight: CGFloat, topInset: CGFloat) -> some View {
+        ZStack {
+            VStack(spacing: Spacing.none) {
+                topChrome(for: video, isActive: isActive)
+                    .padding(.horizontal, Spacing.lgPlus)
+                    .padding(.top, topInset + Spacing.smPlus)
+                Spacer(minLength: 0)
+            }
+
+            if isActive {
+                playbackOverlay
+            }
+
+            if shouldShowNoMovesCTA(for: video) {
+                VStack(spacing: Spacing.none) {
+                    Spacer(minLength: 0)
+                    noMovesCTACard
+                        .padding(.horizontal, Spacing.lgPlus)
+                        .padding(.bottom, Spacing.bottomBarTopOffset + Spacing.bottomBarClearance)
+                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                }
+                .animation(.snappy(duration: 0.28), value: video.movesSorted.isEmpty)
+            }
+        }
+        .frame(height: fullHeight)
     }
 
     private func bandedOffset(height: CGFloat) -> CGFloat {
@@ -422,9 +443,11 @@ struct VideoFeedView: View {
         return max(-maxRubber, min(maxRubber, dragOffset * resistance))
     }
 
-    private func chromeOpacity(height: CGFloat) -> CGFloat {
-        let progress = min(abs(dragOffset) / max(height * 0.5, 1), 1)
-        return 1 - progress * 0.85
+    // Per-video chrome (top rail + title + Loop/Edit, playback overlay, no-moves CTA)
+    // rides with the active card's bandedOffset and dips to 0.5 opacity the moment
+    // a swipe begins, so it reads as glued to the video it belongs to.
+    private var perVideoChromeOpacity: CGFloat {
+        dragOffset == 0 ? 1 : 0.5
     }
 
 
@@ -495,12 +518,16 @@ struct VideoFeedView: View {
         }
     }
 
-    private func topChrome(video: Video) -> some View {
-        VStack(spacing: Spacing.smPlus) {
+    // Per-card top chrome: rail + title (+ Loop/Edit cluster only on the active
+    // card). Neighbor cards render a visual replica with their own video's data
+    // so chrome travels with each card during a swipe.
+    private func topChrome(for video: Video, isActive: Bool) -> some View {
+        let controller = controllers[video.id]
+        return VStack(spacing: Spacing.smPlus) {
             FeedSegmentRail(
-                moves: activeMoves,
-                activeMoveID: activeMoveID,
-                currentTime: activeController?.currentTime ?? 0,
+                moves: video.movesSorted,
+                activeMoveID: isActive ? activeMoveID : nil,
+                currentTime: controller?.currentTime ?? 0,
                 duration: effectiveDuration(for: video),
                 onSelect: { move in play(move) }
             )
@@ -514,7 +541,9 @@ struct VideoFeedView: View {
                     .shadow(color: .black.opacity(0.45), radius: 6, y: 1)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                topActionCluster
+                if isActive {
+                    topActionCluster
+                }
             }
         }
     }
