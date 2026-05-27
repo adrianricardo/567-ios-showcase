@@ -18,12 +18,36 @@ struct StylePickerPaneView: View {
     @State private var showRenameSheet = false
     @State private var showAddSheet = false
 
+    // Export
+    @State private var isExporting = false
+    @State private var exportError: String?
+    @State private var exportDocument: LibraryExportDocument?
+    @State private var pendingExportResult: LibraryExportResult?
+    @State private var lastExportResult: LibraryExportResult?
+    @State private var showExporterSheet = false
+    @State private var showExportSummary = false
+    @State private var showExportTypeDialog = false
+
     var body: some View {
         VStack(spacing: Spacing.none) {
             header
             content
+            exportFooter
         }
         .background(Color(.systemBackground))
+        .photosExportAttachments(
+            isExporting: $isExporting,
+            showExportTypeDialog: $showExportTypeDialog,
+            showExporterSheet: $showExporterSheet,
+            showExportSummary: $showExportSummary,
+            exportDocument: exportDocument,
+            exportError: $exportError,
+            lastExportResult: lastExportResult,
+            defaultFilename: defaultExportFilename(),
+            onFullExport: { Task { await runExport(includeVideos: true) } },
+            onMetadataExport: { Task { await runExport(includeVideos: false) } },
+            onExporterResult: handleExporterResult
+        )
         .sheet(isPresented: $showRenameSheet) {
             if let style = renameTarget {
                 RenameSheet(
@@ -165,5 +189,72 @@ struct StylePickerPaneView: View {
         styleStore.activeStyle = style
         Haptics.select()
         onClose()
+    }
+
+    // MARK: - Export
+
+    private var exportFooter: some View {
+        Button {
+            showExportTypeDialog = true
+        } label: {
+            HStack(spacing: Spacing.sm) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.subheadline.weight(.semibold))
+                Text("Export Library")
+                    .font(.subheadline.weight(.medium))
+            }
+            .foregroundStyle(.secondary)
+            .padding(.vertical, Spacing.smPlus)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isExporting)
+        .padding(.horizontal, Spacing.lg)
+        .padding(.bottom, Spacing.bottomBarTopOffset + Spacing.bottomBarClearance)
+    }
+
+    private func handleExporterResult(_ result: Result<URL, Error>) {
+        switch result {
+        case .success:
+            lastExportResult = pendingExportResult
+            showExportSummary = true
+        case .failure(let err):
+            if (err as NSError).code != NSUserCancelledError {
+                exportError = err.localizedDescription
+            }
+        }
+        pendingExportResult = nil
+        exportDocument = nil
+    }
+
+    @MainActor
+    private func runExport(includeVideos: Bool) async {
+        guard !isExporting else { return }
+        isExporting = true
+        defer { isExporting = false }
+
+        await Task.yield()
+
+        do {
+            try modelContext.save()
+            let container = modelContext.container
+            let result = try await Task.detached(priority: .userInitiated) {
+                let exporter = LibraryExporter(modelContainer: container)
+                return try await exporter.export(includeVideos: includeVideos)
+            }.value
+            pendingExportResult = result
+            exportDocument = LibraryExportDocument(zipURL: result.zipURL)
+            showExporterSheet = true
+        } catch {
+            exportError = error.localizedDescription
+        }
+    }
+
+    private func defaultExportFilename() -> String {
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd-HHmm"
+        let stem = (pendingExportResult?.includesVideoFiles ?? true) ? "Library" : "Metadata"
+        return "Five67-\(stem)-\(df.string(from: Date()))"
     }
 }

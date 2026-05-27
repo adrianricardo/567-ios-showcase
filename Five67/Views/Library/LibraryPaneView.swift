@@ -394,7 +394,7 @@ struct LibraryPaneView: View {
 
 // MARK: - Export modifiers (kept off the main body for readability)
 
-private extension View {
+extension View {
     func photosExportAttachments(
         isExporting: Binding<Bool>,
         showExportTypeDialog: Binding<Bool>,
@@ -466,7 +466,7 @@ private extension View {
     }
 }
 
-private struct PaneExportSummarySheet: View {
+struct PaneExportSummarySheet: View {
     let result: LibraryExportResult
     @Environment(\.dismiss) private var dismiss
     @State private var detailsExpanded = false

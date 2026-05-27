@@ -496,6 +496,7 @@ struct VideoFeedView: View {
                         .frame(width: 48, height: 48)
                         .liquidGlass(in: Circle())
                         .allowsHitTesting(false)
+                        .offset(y: -(24 + 14 + 13) / 2)
 
                     Button {
                         session.isMuted.toggle()
@@ -510,7 +511,7 @@ struct VideoFeedView: View {
                             .liquidGlass(in: Circle(), interactive: true)
                     }
                     .accessibilityLabel(session.isMuted ? "Unmute" : "Mute")
-                    .offset(y: -(24 + 14 + 13))
+                    .offset(y: -3 * (24 + 14 + 13) / 2)
                 }
             }
             .shadow(color: .black.opacity(0.35), radius: 16, y: 6)

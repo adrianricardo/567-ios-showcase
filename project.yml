@@ -60,3 +60,35 @@ targets:
             echo "CFBundleVersion set to $buildNumber"
           fi
         basedOnDependencyAnalysis: false
+
+  Five67Tests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: Five67Tests
+    dependencies:
+      - target: Five67
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nopal.five67.tests
+        DEVELOPMENT_TEAM: "[redacted-team]"
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
+        GENERATE_INFOPLIST_FILE: "YES"
+
+schemes:
+  Five67:
+    build:
+      targets:
+        Five67: all
+        Five67Tests: [test]
+    test:
+      targets:
+        - Five67Tests
+      gatherCoverageData: true
+    run:
+      config: Debug
+    archive:
+      config: Release
