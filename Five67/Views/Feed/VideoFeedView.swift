@@ -197,6 +197,7 @@ struct VideoFeedView: View {
                         onAddVideo: { showAddVideoDialog = true },
                         onOpenStyles: { openStyles() }
                     )
+                    .environment(\.colorScheme, .dark)
                     .padding(.bottom, Spacing.sm)
                 }
                 .ignoresSafeArea(edges: .bottom)
@@ -312,11 +313,8 @@ struct VideoFeedView: View {
     private func feedSurface(for video: Video) -> some View {
         GeometryReader { geo in
             let fullHeight = geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom
-            ZStack {
-                videoStack(height: fullHeight, width: geo.size.width, topInset: geo.safeAreaInsets.top)
-                tapZones
-            }
-            .contentShape(Rectangle())
+            videoStack(height: fullHeight, width: geo.size.width, topInset: geo.safeAreaInsets.top)
+                .contentShape(Rectangle())
         }
     }
 
@@ -382,6 +380,14 @@ struct VideoFeedView: View {
                             .overlay(ambientGradient)
                     } else {
                         Color.black
+                    }
+
+                    // Tap zones sit between the video and the chrome so chrome
+                    // buttons (Loop/Edit, mute) capture their own taps while
+                    // background taps still drive prev/play/next.
+                    if isActive {
+                        tapZones
+                            .allowsHitTesting(!coachActive)
                     }
 
                     // Per-card chrome lives inside the card, so it travels in
@@ -516,6 +522,7 @@ struct VideoFeedView: View {
             }
             .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
             .transition(.opacity.combined(with: .scale(scale: 0.86)))
+            .environment(\.colorScheme, .dark)
         }
     }
 
