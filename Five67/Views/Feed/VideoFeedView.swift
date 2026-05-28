@@ -23,6 +23,7 @@ struct VideoFeedView: View {
     @State private var activeVideoID: UUID?
     @State private var selectedIndex = 0
     @State private var activeMoveID: UUID?
+    @State private var manualMoveSelection: ManualMoveSelection?
     @State private var dragOffset: CGFloat = 0
     @State private var showDetail = false
     @State private var pickerItems: [PhotosPickerItem] = []
@@ -174,7 +175,6 @@ struct VideoFeedView: View {
                 .frame(width: geo.size.width, height: geo.size.height)
                 .offset(x: (paneProgress - 1) * geo.size.width)
                 .allowsHitTesting(paneProgress >= 1)
-                .shadow(color: .black.opacity(0.25 * paneProgress), radius: 18, x: 6)
 
                 StylePickerPaneView(
                     onClose: { settleStylePane(open: false) }
@@ -182,7 +182,6 @@ struct VideoFeedView: View {
                 .frame(width: geo.size.width, height: geo.size.height)
                 .offset(x: (1 - stylePaneProgress) * geo.size.width)
                 .allowsHitTesting(stylePaneProgress >= 1)
-                .shadow(color: .black.opacity(0.25 * stylePaneProgress), radius: 18, x: -6)
 
                 // Bottom bar is global chrome — it does not ride with the
                 // swiping video. The per-video "no moves yet" CTA lives
@@ -206,7 +205,7 @@ struct VideoFeedView: View {
                 .animation(.easeInOut(duration: 0.25), value: coachActive)
                 .animation(.easeInOut(duration: 0.2), value: showDetail)
             }
-            .gesture(feedAndPaneGesture(size: geo.size))
+            .gesture(feedAndPaneGesture(size: geo.size), including: showDetail ? .subviews : .all)
         }
         .photosPicker(
             isPresented: $showPhotosPicker,
@@ -301,6 +300,7 @@ struct VideoFeedView: View {
             // overwritten to that move's start; otherwise it's still the
             // handoff-in timestamp. Either way, seek there and play.
             if !presenting {
+                ensureFeedSurface()
                 if let t = editorStartTime, t.isFinite, t >= 0 {
                     activeController?.seek(to: t)
                 }
@@ -539,6 +539,9 @@ struct VideoFeedView: View {
                 duration: effectiveDuration(for: video),
                 onSelect: { move in play(move) }
             )
+            .transaction { transaction in
+                transaction.animation = nil
+            }
 
             HStack(spacing: Spacing.md) {
                 Text(feedTitle(for: video))
@@ -548,6 +551,9 @@ struct VideoFeedView: View {
                     .truncationMode(.tail)
                     .shadow(color: .black.opacity(0.45), radius: 6, y: 1)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .transaction { transaction in
+                        transaction.animation = nil
+                    }
 
                 if isActive {
                     topActionCluster
@@ -787,6 +793,7 @@ struct VideoFeedView: View {
     private func feedAndPaneGesture(size: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 14)
             .onChanged { value in
+                guard !showDetail else { return }
                 if dragAxis == nil {
                     dragAxis = abs(value.translation.width) >= abs(value.translation.height)
                         ? .horizontal : .vertical
@@ -822,6 +829,11 @@ struct VideoFeedView: View {
                 }
             }
             .onEnded { value in
+                guard !showDetail else {
+                    dragAxis = nil
+                    horizontalTarget = nil
+                    return
+                }
                 switch dragAxis {
                 case .horizontal:
                     let predictedDelta = value.predictedEndTranslation.width / max(size.width, 1)
@@ -950,16 +962,32 @@ struct VideoFeedView: View {
             // pending move once the new video is current.
             selectedIndex = idx
         }
+        if router.selectedTab != .feed {
+            router.selectedTab = .feed
+        }
         Haptics.light()
     }
 
     private func openEditor() {
         guard selectedVideo != nil else { return }
+        ensureFeedSurface()
         // Hand the feed's current playback time to the editor so it opens where
         // the user was looking, and pause the feed's player.
         editorStartTime = activeController?.currentTime
         activeController?.pause()
         showDetail = true
+    }
+
+    private func ensureFeedSurface() {
+        if paneProgress != 0 {
+            paneProgress = 0
+        }
+        if stylePaneProgress != 0 {
+            stylePaneProgress = 0
+        }
+        if router.selectedTab != .feed {
+            router.selectedTab = .feed
+        }
     }
 
     private func applyStyleToTargets(_ style: Style) {
@@ -1136,13 +1164,23 @@ struct VideoFeedView: View {
     }
 
     private func play(_ move: Move) {
-        activeMoveID = move.id
+        manualMoveSelection = ManualMoveSelection(move: move)
+        withTransaction(Transaction(animation: nil)) {
+            activeMoveID = move.id
+        }
         activeController?.playRange(start: move.time, end: move.endTime)
         Haptics.select()
     }
 
     private func updateActiveMove(for time: TimeInterval) {
         guard !activeMoves.isEmpty else { return }
+        if let selection = manualMoveSelection {
+            if selection.isExpired {
+                manualMoveSelection = nil
+            } else if !selection.contains(time) {
+                return
+            }
+        }
         let duration = effectiveDuration(for: selectedVideo)
         guard let current = activeMoves.first(where: { move in
             let end = move.endTime ?? duration
@@ -1265,6 +1303,28 @@ private struct PendingFeedMove {
     let endTime: TimeInterval?
 }
 
+private struct ManualMoveSelection {
+    let start: TimeInterval
+    let end: TimeInterval?
+    let expiresAt: Date
+
+    init(move: Move) {
+        start = move.time
+        end = move.endTime
+        expiresAt = Date().addingTimeInterval(0.35)
+    }
+
+    var isExpired: Bool {
+        Date() >= expiresAt
+    }
+
+    func contains(_ time: TimeInterval) -> Bool {
+        guard time.isFinite else { return false }
+        let upperBound = end ?? .infinity
+        return start <= time && time < max(start, upperBound)
+    }
+}
+
 private struct FeedSegmentRail: View {
     let moves: [Move]
     let activeMoveID: UUID?
@@ -1301,25 +1361,19 @@ private struct FeedSegmentRail: View {
     }
 
     private var progressCapsule: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.32))
-                Capsule()
-                    .fill(.white)
-                    .frame(width: geo.size.width * progressFraction)
-            }
+        ZStack(alignment: .leading) {
+            Capsule().fill(.white.opacity(0.32))
+            FeedProgressFill(fraction: progressFraction)
+                .fill(.white)
         }
     }
 
     private func segmentCapsule(for move: Move, index: Int) -> some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(fill(for: move, index: index))
-                if move.id == activeMoveID {
-                    Capsule()
-                        .fill(.white)
-                        .frame(width: geo.size.width * segmentProgress(for: move))
-                }
+        ZStack(alignment: .leading) {
+            Capsule().fill(fill(for: move, index: index))
+            if move.id == activeMoveID {
+                FeedProgressFill(fraction: segmentProgress(for: move))
+                    .fill(.white)
             }
         }
     }
@@ -1348,4 +1402,25 @@ private struct FeedSegmentRail: View {
     }
 }
 
+private struct FeedProgressFill: Shape {
+    var fraction: CGFloat
 
+    var animatableData: CGFloat {
+        get { fraction }
+        set { fraction = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let rawWidth = rect.width * max(0, min(1, fraction))
+        let width = rawWidth > 0 ? min(rect.width, max(rect.height, rawWidth)) : 0
+        guard width > 0 else { return Path() }
+
+        let fillRect = CGRect(
+            x: rect.minX,
+            y: rect.minY,
+            width: width,
+            height: rect.height
+        )
+        return Path(roundedRect: fillRect, cornerRadius: rect.height / 2)
+    }
+}

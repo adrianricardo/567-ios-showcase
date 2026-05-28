@@ -126,6 +126,7 @@ import OSLog
         let tolerance = CMTime(value: 1, timescale: 30)
 
         logger.debug("Seeking to \(target, privacy: .public)")
+        currentTime = target
         player.seek(to: cmTime, toleranceBefore: tolerance, toleranceAfter: tolerance) { [weak self] finished in
             guard let self else { return }
             if !finished {

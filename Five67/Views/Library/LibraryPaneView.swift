@@ -189,6 +189,7 @@ struct LibraryPaneView: View {
                         )
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                     }
                 } header: {
                     Text(group.title)
@@ -196,6 +197,7 @@ struct LibraryPaneView: View {
                         .foregroundStyle(.secondary)
                         .textCase(nil)
                         .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.lg, bottom: Spacing.xs, trailing: Spacing.lg))
                 }
                 .listSectionSeparator(.hidden)
             }
@@ -206,10 +208,13 @@ struct LibraryPaneView: View {
                     description: Text("Try a different filter, style, or search.")
                 )
                 .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
             }
         }
         .listStyle(.plain)
+        .listSectionSpacing(Spacing.sm)
         .scrollIndicators(.hidden)
+        .contentMargins(.top, Spacing.none, for: .scrollContent)
         .contentMargins(.bottom, Spacing.bottomBarTopOffset, for: .scrollContent)
     }
 

@@ -7,9 +7,8 @@ import SwiftUI
 /// usage (`Color.accentColor`, `Color(.systemBackground)`) stays inline.
 enum Theme {
     /// Row tint when a list row represents the currently active/selected item
-    /// (active move in the editor, active video in the library). Designed for
-    /// Five67's dark canvases — barely visible on a light background by design.
-    static let rowActiveBackground: Color = Color.white.opacity(0.05)
+    /// (active move in the editor, active video in the library).
+    static let rowActiveBackground: Color = Color(.tertiarySystemFill)
 
     /// Foreground tint for the "now playing" affordance (e.g. the waveform
     /// glyph next to the active video row in the library).

@@ -130,6 +130,7 @@ struct StylePickerPaneView: View {
         .buttonStyle(.plain)
         .listRowInsets(EdgeInsets(top: Spacing.md, leading: Spacing.lg, bottom: Spacing.md, trailing: Spacing.lg))
         .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
     }
 
     private func styleRow(_ style: Style) -> some View {
@@ -152,6 +153,7 @@ struct StylePickerPaneView: View {
         .buttonStyle(.plain)
         .listRowInsets(EdgeInsets(top: Spacing.md, leading: Spacing.lg, bottom: Spacing.md, trailing: Spacing.lg))
         .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if !style.isDefault {
                 Button {
@@ -183,6 +185,7 @@ struct StylePickerPaneView: View {
         .buttonStyle(.plain)
         .listRowInsets(EdgeInsets(top: Spacing.md, leading: Spacing.lg, bottom: Spacing.md, trailing: Spacing.lg))
         .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
     }
 
     private func select(_ style: Style?) {

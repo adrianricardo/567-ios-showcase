@@ -72,6 +72,7 @@ struct VideoDetailView: View {
             .toolbar(.hidden, for: .navigationBar)
             .toolbar(.hidden, for: .tabBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
+            .highPriorityGesture(editorBackSwipe)
             .sheet(isPresented: $showRename) {
                 RenameSheet(
                     title: "Rename Video",
@@ -195,12 +196,28 @@ struct VideoDetailView: View {
                     .id(move.id)
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
                 }
             }
             .listStyle(.plain)
         } else {
             emptyMovesHint
         }
+    }
+
+    private var editorBackSwipe: some Gesture {
+        DragGesture(minimumDistance: 20, coordinateSpace: .local)
+            .onEnded { value in
+                let horizontalDistance = value.translation.width
+                let predictedDistance = value.predictedEndTranslation.width
+                let verticalDistance = abs(value.translation.height)
+                let startedAtLeadingEdge = value.startLocation.x <= 36
+                let isRightSwipe = horizontalDistance > 70 || predictedDistance > 130
+                let isMostlyHorizontal = horizontalDistance > verticalDistance * 1.4
+
+                guard startedAtLeadingEdge, isRightSwipe, isMostlyHorizontal else { return }
+                finishEditing()
+            }
     }
 
     /// Inline coach shown when the video has no moves yet. The scissor icon

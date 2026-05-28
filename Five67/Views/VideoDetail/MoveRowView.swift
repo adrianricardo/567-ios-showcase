@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct MoveRowView: View {
     let move: Move
@@ -9,6 +10,7 @@ struct MoveRowView: View {
     let onExclude: () -> Void
 
     @State private var showRename = false
+    @State private var thumbnail: UIImage?
 
     private var displayName: String {
         move.name.isEmpty ? "Unnamed segment" : move.name
@@ -18,18 +20,27 @@ struct MoveRowView: View {
         move.name.isEmpty && !move.isExcluded
     }
 
+    private var thumbnailTaskID: String {
+        guard let video = move.video else { return "missing-\(move.id.uuidString)" }
+        return "\(video.id.uuidString)-\(move.time)-\(video.localFilename)"
+    }
+
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: Spacing.md) {
-                Text(displayName)
-                    .font(.body)
-                    .foregroundStyle(move.isExcluded ? .tertiary : .primary)
-                    .lineLimit(1)
+                thumbnailView
                     .padding(.leading, Spacing.lg)
 
-                Text(move.durationLabel)
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.tertiary)
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text(displayName)
+                        .font(.body)
+                        .foregroundStyle(move.isExcluded ? .tertiary : .primary)
+                        .lineLimit(1)
+
+                    Text(move.durationLabel)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                }
 
                 Spacer(minLength: Spacing.sm)
 
@@ -52,12 +63,13 @@ struct MoveRowView: View {
             .background(
                 isActive && !move.isExcluded
                     ? Theme.rowActiveBackground
-                    : Color(.systemBackground)
+                    : Color.clear
             )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .opacity(move.isExcluded ? 0.5 : 1)
+        .task(id: thumbnailTaskID) { await loadThumbnail() }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
                 onExclude()
@@ -98,5 +110,34 @@ struct MoveRowView: View {
                 onSave: onRename
             )
         }
+    }
+
+    private var thumbnailView: some View {
+        Group {
+            if let thumbnail {
+                Image(uiImage: thumbnail)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                Rectangle()
+                    .fill(Color(.systemGray5))
+                    .overlay(Image(systemName: "film").foregroundStyle(.secondary))
+            }
+        }
+        .frame(width: 54, height: 40)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+
+    private func loadThumbnail() async {
+        guard let video = move.video else {
+            thumbnail = nil
+            return
+        }
+        thumbnail = await ThumbnailService.shared.thumbnail(
+            for: video.fileURL,
+            at: move.time,
+            videoID: video.id,
+            height: 40
+        )
     }
 }
