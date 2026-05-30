@@ -258,6 +258,6 @@ struct StylePickerPaneView: View {
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd-HHmm"
         let stem = (pendingExportResult?.includesVideoFiles ?? true) ? "Library" : "Metadata"
-        return "Five67-\(stem)-\(df.string(from: Date()))"
+        return "567-\(stem)-\(df.string(from: Date()))"
     }
 }

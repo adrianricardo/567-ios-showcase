@@ -133,13 +133,13 @@ struct MigrationFailureView: View {
     private func defaultExportFolderName() -> String {
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd-HHmm"
-        return "Five67-Recovery-\(df.string(from: Date()))"
+        return "567-Recovery-\(df.string(from: Date()))"
     }
 
     // MARK: - Support mail
 
     private func openSupportMail() {
-        let subject = "Five67: library load failure"
+        let subject = "567: library load failure"
         let body = """
         App could not open the library database.
 
@@ -167,7 +167,7 @@ enum RawStoreExport {
     static func buildBundle() throws -> URL {
         let fm = FileManager.default
         let tempRoot = fm.temporaryDirectory
-            .appendingPathComponent("Five67Recovery-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("567Recovery-\(UUID().uuidString)", isDirectory: true)
         try fm.createDirectory(at: tempRoot, withIntermediateDirectories: true)
 
         // 1. SwiftData store files from Application Support.
@@ -197,7 +197,7 @@ enum RawStoreExport {
 
         // 3. README explaining the bundle.
         let readme = """
-        Five67 recovery bundle
+        567 recovery bundle
 
         - store/default.store(-shm|-wal)?  : Raw SwiftData (SQLite) library database.
         - videos/                          : Imported video files (.mov).

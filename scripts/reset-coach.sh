@@ -33,4 +33,4 @@ xcrun simctl terminate booted "$APP_ID" 2>/dev/null || true
 # the daemon serves the stale value back to the app even though disk is clean.
 xcrun simctl spawn booted killall cfprefsd 2>/dev/null || true
 
-echo "Coach flags cleared and cfprefsd evicted. Relaunch Five67 from the home screen."
+echo "Coach flags cleared and cfprefsd evicted. Relaunch 567 from the home screen."

@@ -28,14 +28,15 @@ targets:
     info:
       path: Five67/Resources/Info.plist
       properties:
-        CFBundleName: Five67
-        CFBundleDisplayName: Five67
+        CFBundleName: "567"
+        CFBundleDisplayName: "567"
+        CFBundleShortVersionString: "1.0.2"
         UILaunchScreen:
           UIColorName: ""
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UIRequiresFullScreen: false
-        NSPhotoLibraryUsageDescription: "Five67 needs access to your library to import practice videos."
+        NSPhotoLibraryUsageDescription: "567 needs access to your library to import practice videos."
         NSSupportsLiveActivities: false
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations:

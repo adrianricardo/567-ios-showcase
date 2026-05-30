@@ -604,7 +604,7 @@ struct VideoFeedView: View {
                     .font(.largeTitle.weight(.heavy))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white)
-                Text("Five67 becomes a full-screen feed: swipe between videos, tap through moves, and swipe right for your library.")
+                Text("567 becomes a full-screen feed: swipe between videos, tap through moves, and swipe right for your library.")
                     .font(.body.weight(.medium))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.7))

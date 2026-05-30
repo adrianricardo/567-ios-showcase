@@ -72,7 +72,13 @@ struct VideoDetailView: View {
             .toolbar(.hidden, for: .navigationBar)
             .toolbar(.hidden, for: .tabBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
-            .highPriorityGesture(editorBackSwipe)
+            .overlay(alignment: .leading) {
+                Color.clear
+                    .frame(width: 20)
+                    .contentShape(Rectangle())
+                    .highPriorityGesture(editorBackSwipe)
+                    .ignoresSafeArea()
+            }
             .sheet(isPresented: $showRename) {
                 RenameSheet(
                     title: "Rename Video",
