@@ -51,10 +51,10 @@ enum Spacing {
     static let rowMinHeight: CGFloat = 56
 
     // MARK: - Feed-screen layout
-    /// Distance from the screen bottom edge to the top of `GlobalBottomBar`
-    /// (8pt outer lift + 76pt style chip + ~8pt bar internal). Layouts that
-    /// need to clear the bar use this plus a small visual gap.
+    /// Legacy offset kept for `VideoDetailView` centering (tab bar is hidden
+    /// there, so this counteracts the empty area at the bottom of the editor).
     static let bottomBarTopOffset: CGFloat = 92
-    /// Standard gap left between bottom chrome and the GlobalBottomBar.
+    /// Small visual gap between content and the bottom of the native tab bar
+    /// safe-area inset. Used by panes and the feed CTA card.
     static let bottomBarClearance: CGFloat = 8
 }

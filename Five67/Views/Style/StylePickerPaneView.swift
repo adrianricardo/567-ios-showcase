@@ -1,15 +1,14 @@
 import SwiftUI
 import SwiftData
 
-/// Swipe-in right-side pane co-equal to the feed. Lists every `Style`, lets
-/// the user pick the active one, add a new custom style, or rename existing
-/// custom ones. Defaults (Cumbia / Salsa / Bachata) are not renameable and
-/// not deletable in this pass.
+/// Styles tab. Lists every `Style`, lets the user pick the active one, add a
+/// new custom style, or rename existing custom ones. Selecting a style returns
+/// to the Feed tab automatically. Defaults (Cumbia / Salsa / Bachata) are not
+/// renameable and not deletable.
 struct StylePickerPaneView: View {
-    let onClose: () -> Void
-
     @Environment(\.modelContext) private var modelContext
     @Environment(StyleStore.self) private var styleStore
+    @Environment(AppRouter.self) private var router
 
     @Query(sort: \Style.createdAt, order: .forward)
     private var styles: [Style]
@@ -68,7 +67,7 @@ struct StylePickerPaneView: View {
                 let style = Style(name: newName)
                 modelContext.insert(style)
                 styleStore.activeStyle = style
-                onClose()
+                router.selectedTab = .feed
             }
         }
     }
@@ -76,24 +75,12 @@ struct StylePickerPaneView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack {
-            Text("Styles")
-                .font(.title3.weight(.semibold))
-            Spacer(minLength: 0)
-            Button {
-                onClose()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .frame(width: Spacing.touchTarget, height: Spacing.touchTarget)
-                    .background(Color(.tertiarySystemFill), in: Circle())
-            }
-            .accessibilityLabel("Close")
-        }
-        .padding(.horizontal, Spacing.lg)
-        .padding(.top, Spacing.mdPlus)
-        .padding(.bottom, Spacing.smPlus)
+        Text("Styles")
+            .font(.title3.weight(.semibold))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Spacing.lg)
+            .padding(.top, Spacing.mdPlus)
+            .padding(.bottom, Spacing.smPlus)
     }
 
     // MARK: - Content
@@ -108,7 +95,7 @@ struct StylePickerPaneView: View {
         }
         .listStyle(.plain)
         .scrollIndicators(.hidden)
-        .contentMargins(.bottom, Spacing.bottomBarTopOffset, for: .scrollContent)
+        .contentMargins(.bottom, Spacing.bottomBarClearance, for: .scrollContent)
     }
 
     private var allRow: some View {
@@ -191,7 +178,7 @@ struct StylePickerPaneView: View {
     private func select(_ style: Style?) {
         styleStore.activeStyle = style
         Haptics.select()
-        onClose()
+        router.selectedTab = .feed
     }
 
     // MARK: - Export
@@ -214,7 +201,7 @@ struct StylePickerPaneView: View {
         .buttonStyle(.plain)
         .disabled(isExporting)
         .padding(.horizontal, Spacing.lg)
-        .padding(.bottom, Spacing.bottomBarTopOffset + Spacing.bottomBarClearance)
+        .padding(.bottom, Spacing.bottomBarClearance)
     }
 
     private func handleExporterResult(_ result: Result<URL, Error>) {

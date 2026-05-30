@@ -19,9 +19,9 @@ private struct PaneMoveGroup: Identifiable {
     let moves: [Move]
 }
 
-/// Swipe-in side pane co-equal to the feed. Consolidates the Videos list and
-/// the Moves-grouped-by-video list into one surface, scoped by the global
-/// style mode. Tapping a row hands selection back to the feed via callbacks.
+/// Library tab. Consolidates the Videos list and the Moves-grouped-by-video
+/// list into one surface, scoped by the global style mode. Tapping a row hands
+/// selection back to the feed via callbacks wired in RootView.
 struct LibraryPaneView: View {
     let activeVideoID: UUID?
     let activeMoveID: UUID?
@@ -29,7 +29,6 @@ struct LibraryPaneView: View {
     let onSelectMove: (Move) -> Void
     let onImportPhotos: () -> Void
     let onImportFiles: () -> Void
-    let onClose: () -> Void
 
     @Environment(\.modelContext) private var modelContext
     @Environment(StyleStore.self) private var styleStore
@@ -215,7 +214,7 @@ struct LibraryPaneView: View {
         .listSectionSpacing(Spacing.sm)
         .scrollIndicators(.hidden)
         .contentMargins(.top, Spacing.none, for: .scrollContent)
-        .contentMargins(.bottom, Spacing.bottomBarTopOffset, for: .scrollContent)
+        .contentMargins(.bottom, Spacing.bottomBarClearance, for: .scrollContent)
     }
 
     private var videosList: some View {
@@ -261,7 +260,7 @@ struct LibraryPaneView: View {
         }
         .listStyle(.plain)
         .scrollIndicators(.hidden)
-        .contentMargins(.bottom, Spacing.bottomBarTopOffset, for: .scrollContent)
+        .contentMargins(.bottom, Spacing.bottomBarClearance, for: .scrollContent)
     }
 
     private var emptyState: some View {

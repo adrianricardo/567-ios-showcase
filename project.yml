@@ -79,6 +79,23 @@ targets:
         CODE_SIGN_IDENTITY: "Apple Development"
         GENERATE_INFOPLIST_FILE: "YES"
 
+  Five67UITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: Five67UITests
+    dependencies:
+      - target: Five67
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nopal.five67.uitests
+        DEVELOPMENT_TEAM: "[redacted-team]"
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
+        GENERATE_INFOPLIST_FILE: "YES"
+
 schemes:
   Five67:
     build:
@@ -88,6 +105,7 @@ schemes:
     test:
       targets:
         - Five67Tests
+        - Five67UITests
       gatherCoverageData: true
     run:
       config: Debug
