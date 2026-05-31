@@ -1032,8 +1032,11 @@ struct VideoFeedView: View {
             Haptics.light()
             return
         }
-        let nextIndex = min(activeMoveIndex + 1, activeMoves.count - 1)
-        play(activeMoves[nextIndex])
+        if activeMoveIndex == activeMoves.count - 1 {
+            play(activeMoves[0])
+        } else {
+            play(activeMoves[activeMoveIndex + 1])
+        }
     }
 
     private func jumpToPreviousMove() {
