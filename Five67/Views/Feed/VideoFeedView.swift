@@ -6,6 +6,7 @@ import UIKit
 
 struct VideoFeedView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var systemColorScheme
     @Environment(PlaybackSession.self) private var session
     @Environment(StyleStore.self) private var styleStore
     @Environment(AppRouter.self) private var router
@@ -134,6 +135,9 @@ struct VideoFeedView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .toolbar(coachActive ? .hidden : .automatic, for: .tabBar)
+            // Keep global navigation tied to the system appearance instead of
+            // letting the feed's full-bleed video backdrop drive the tab bar.
+            .toolbarColorScheme(systemColorScheme, for: .tabBar)
             .navigationDestination(isPresented: $showDetail) {
                 if let selectedVideo {
                     VideoDetailView(
