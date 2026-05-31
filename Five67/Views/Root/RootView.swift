@@ -3,6 +3,10 @@ import SwiftUI
 struct RootView: View {
     @Environment(AppRouter.self) private var router
 
+    /// Last real (non-`.add`) tab, so selecting the detached add control can
+    /// restore the visible content without a flicker.
+    @State private var previousTab: AppTab = .feed
+
     var body: some View {
         @Bindable var router = router
         TabView(selection: $router.selectedTab) {
@@ -36,34 +40,28 @@ struct RootView: View {
             Tab("Styles", systemImage: "slider.horizontal.3", value: AppTab.style) {
                 StylePickerPaneView()
             }
-        }
-        .overlay(alignment: .bottomTrailing) {
-            if !router.hidesBottomChrome {
-                addVideoButton
-                    .padding(.trailing, Spacing.lgPlus)
-                    .padding(.bottom, Spacing.xl2)
-                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            // Detached add-video control. The `.search` role makes the system
+            // render this tab separated from the main cluster (trailing pill).
+            // It never actually displays — selecting it triggers an import and
+            // restores the previous tab in the `.onChange` below.
+            Tab("Add video", systemImage: "plus", value: AppTab.add, role: .search) {
+                EmptyView()
             }
+            .accessibilityLabel("Add video")
         }
+        .tint(.primary)
+        .toolbarVisibility(router.hidesBottomChrome ? .hidden : .automatic, for: .tabBar)
         .animation(.easeInOut(duration: 0.2), value: router.hidesBottomChrome)
-    }
-
-    private var addVideoButton: some View {
-        Button {
+        .onChange(of: router.selectedTab) { _, newValue in
+            guard newValue == .add else {
+                previousTab = newValue
+                return
+            }
+            // Intercept: fire the import request and restore the prior tab so
+            // the empty search pane is never shown.
             router.addVideoRequested = true
-            router.selectedTab = .feed
             Haptics.light()
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 26, weight: .semibold))
-                .foregroundStyle(Color.primary)
-                .frame(width: 64, height: 64)
-                .padding(Spacing.xsPlus)
-                .liquidGlass(in: Circle(), interactive: true)
+            router.selectedTab = previousTab
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Add video")
-        .shadow(color: .black.opacity(0.14), radius: 16, y: 4)
-        .environment(\.colorScheme, .dark)
     }
 }

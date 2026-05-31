@@ -10,6 +10,9 @@ enum AppTab: Hashable {
     case feed
     case library
     case style
+    /// Detached add-video control rendered via `Tab(role: .search)`. Never stays
+    /// selected — selecting it triggers an import request and restores the prior tab.
+    case add
 }
 
 /// Cross-tab coordinator. Lives in the environment so any tab can route back to
