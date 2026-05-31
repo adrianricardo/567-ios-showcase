@@ -45,9 +45,25 @@ struct VideoFeedView: View {
     // Add-video action sheet, presented by the Add button or Library import actions.
     @State private var showAddVideoDialog = false
 
-    // Axis lock for the vertical paging gesture — prevents horizontal tab-switch
-    // swipes from accidentally triggering video pagination.
+    // Axis lock for the feed drag gesture — once a drag commits to an axis it
+    // stays there. Vertical pages between videos; horizontal scrubs the playhead.
     @State private var isVerticalDrag: Bool?
+
+    // Horizontal scrub state. While a finger is dragging horizontally we seek the
+    // whole clip across move boundaries; the active-move loop clamp is lifted for
+    // the duration and re-armed on release.
+    @State private var isScrubbing = false
+    @State private var scrubStartTime: TimeInterval = 0
+    @State private var scrubWasPlaying = false
+    @State private var scrubLastMoveID: UUID?
+
+    /// How a horizontal drag maps to playback time. Flip this constant and
+    /// rebuild to compare the two feels on device.
+    /// - `relative`: anchored at the playhead, drag *delta* scaled by `scrubSpan`.
+    /// - `absolute`: finger X position maps straight to the timeline (left = 0,
+    ///   right = end); the playhead jumps to the finger on touch.
+    private enum ScrubMapping { case relative, absolute }
+    private static let scrubMapping: ScrubMapping = .absolute
 
     // Two-beat coach. Beat 1 teaches the non-obvious axis (swipe = different
     // video). Beat 2 teaches the move tap-zones (left/right thirds of the
@@ -140,7 +156,7 @@ struct VideoFeedView: View {
     private var baseFeed: some View {
         GeometryReader { geo in
             feedRoot
-                .gesture(verticalPagingGesture(height: geo.size.height), including: showDetail ? .subviews : .all)
+                .gesture(feedDragGesture(width: geo.size.width, height: geo.size.height), including: showDetail ? .subviews : .all)
         }
         .photosPicker(
             isPresented: $showPhotosPicker,
@@ -697,26 +713,33 @@ struct VideoFeedView: View {
         withAnimation(.easeInOut(duration: 0.25)) { showTapCoach = false }
     }
 
-    // MARK: - Vertical paging gesture
+    // MARK: - Feed drag gesture (vertical paging + horizontal scrub)
 
-    private func verticalPagingGesture(height: CGFloat) -> some Gesture {
+    private func feedDragGesture(width: CGFloat, height: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 14)
             .onChanged { value in
                 guard !showDetail else { return }
                 if isVerticalDrag == nil {
                     isVerticalDrag = abs(value.translation.height) >= abs(value.translation.width)
                 }
-                guard isVerticalDrag == true else { return }
-                dragOffset = value.translation.height
-                startNeighborPlayback()
+                if isVerticalDrag == true {
+                    dragOffset = value.translation.height
+                    startNeighborPlayback()
+                } else {
+                    updateScrub(translation: value.translation.width, locationX: value.location.x, width: width)
+                }
             }
             .onEnded { value in
                 defer { isVerticalDrag = nil }
-                guard !showDetail, isVerticalDrag == true else {
+                guard !showDetail else {
                     withAnimation(.snappy(duration: 0.28, extraBounce: 0.05)) { dragOffset = 0 }
                     return
                 }
-                endVerticalSwipe(value: value, height: height)
+                if isVerticalDrag == true {
+                    endVerticalSwipe(value: value, height: height)
+                } else if isVerticalDrag == false {
+                    endScrub()
+                }
             }
     }
 
@@ -730,6 +753,95 @@ struct VideoFeedView: View {
         } else {
             pauseNeighbors()
             withAnimation(.snappy(duration: 0.28, extraBounce: 0.05)) { dragOffset = 0 }
+        }
+    }
+
+    // MARK: - Horizontal scrub
+
+    /// How many seconds of the clip a full-screen-width drag travels. Anchored at
+    /// the playhead when the gesture began, so a small swipe nudges and a big
+    /// swipe travels far ("relative / velocity-scaled"). Short clips map roughly
+    /// 1:1 across the screen; longer clips cap so a single pass stays controllable
+    /// and you scrub in multiple swipes.
+    private func scrubSpan(for duration: TimeInterval) -> TimeInterval {
+        max(12, min(duration, 75))
+    }
+
+    private func updateScrub(translation: CGFloat, locationX: CGFloat, width: CGFloat) {
+        guard let controller = activeController, width > 0 else { return }
+        let duration = effectiveDuration(for: selectedVideo)
+        guard duration > 0 else { return }
+
+        if !isScrubbing {
+            isScrubbing = true
+            scrubStartTime = controller.currentTime
+            scrubWasPlaying = controller.isPlaying
+            scrubLastMoveID = activeMoveID
+            controller.pause()
+            // Lift the move-range loop clamp so seeking can cross boundaries
+            // without the loop observer snapping us back to the move start.
+            controller.setActiveRange(start: nil, end: nil)
+            Haptics.light()
+        }
+
+        let raw: TimeInterval
+        switch Self.scrubMapping {
+        case .relative:
+            // Anchored at the playhead; drag delta scaled by the tuned span.
+            raw = scrubStartTime + Double(translation / width) * scrubSpan(for: duration)
+        case .absolute:
+            // Finger X maps straight to the timeline — jumps to the finger on touch.
+            raw = Double(locationX / width) * duration
+        }
+        let target = max(0, min(duration, raw))
+        controller.seek(to: target)
+        updateScrubHighlight(for: target)
+    }
+
+    /// Moves the rail highlight and ticks when the playhead crosses into a new
+    /// move during a scrub, without re-arming the loop range (that waits for
+    /// release so seeking stays free across boundaries).
+    private func updateScrubHighlight(for time: TimeInterval) {
+        guard !activeMoves.isEmpty else { return }
+        let duration = effectiveDuration(for: selectedVideo)
+        let landedID = moveContaining(time, duration: duration)?.id
+        guard landedID != scrubLastMoveID else { return }
+        scrubLastMoveID = landedID
+        if let landedID {
+            withTransaction(Transaction(animation: nil)) { activeMoveID = landedID }
+        }
+        Haptics.select()
+    }
+
+    private func endScrub() {
+        guard isScrubbing, let controller = activeController else {
+            isScrubbing = false
+            return
+        }
+        isScrubbing = false
+        scrubLastMoveID = nil
+        let duration = effectiveDuration(for: selectedVideo)
+
+        // Re-bind to whatever move the playhead landed in — re-arms the loop
+        // boundary — but keep the scrubbed position rather than snapping to the
+        // move start. A grace window guards against the periodic time observer
+        // briefly reading a pre-seek value and flipping the highlight back.
+        if let move = moveContaining(controller.currentTime, duration: duration) {
+            manualMoveSelection = ManualMoveSelection(move: move)
+            withTransaction(Transaction(animation: nil)) { activeMoveID = move.id }
+            controller.setActiveRange(start: move.time, end: move.endTime)
+        } else {
+            controller.setActiveRange(start: 0, end: duration)
+        }
+
+        if scrubWasPlaying { controller.play() }
+        Haptics.light()
+    }
+
+    private func moveContaining(_ time: TimeInterval, duration: TimeInterval) -> Move? {
+        activeMoves.first { move in
+            let end = move.endTime ?? duration
+            return move.time <= time && time < max(move.time, end)
         }
     }
 
@@ -951,6 +1063,7 @@ struct VideoFeedView: View {
     }
 
     private func updateActiveMove(for time: TimeInterval) {
+        guard !isScrubbing else { return }
         guard !activeMoves.isEmpty else { return }
         if let selection = manualMoveSelection {
             if selection.isExpired {
@@ -960,10 +1073,7 @@ struct VideoFeedView: View {
             }
         }
         let duration = effectiveDuration(for: selectedVideo)
-        guard let current = activeMoves.first(where: { move in
-            let end = move.endTime ?? duration
-            return move.time <= time && time < max(move.time, end)
-        }) else { return }
+        guard let current = moveContaining(time, duration: duration) else { return }
         if current.id != activeMoveID {
             activeMoveID = current.id
             activeController?.setActiveRange(start: current.time, end: current.endTime)
