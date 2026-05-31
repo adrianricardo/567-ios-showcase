@@ -293,9 +293,10 @@ struct LibraryPaneView: View {
                 } label: {
                     Label("Import from Files", systemImage: "folder")
                         .font(.headline.weight(.semibold))
+                        .foregroundStyle(Color.primary)
                         .frame(maxWidth: .infinity)
                         .frame(height: Spacing.primaryButtonHeight)
-                        .background(Color(.tertiarySystemFill), in: Capsule())
+                        .background(Theme.secondaryChipFill, in: Capsule())
                 }
             }
             .padding(.horizontal, Spacing.xl3)

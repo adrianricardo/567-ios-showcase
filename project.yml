@@ -35,6 +35,7 @@ targets:
           UIColorName: ""
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
+        UIUserInterfaceStyle: Dark
         UIRequiresFullScreen: false
         NSPhotoLibraryUsageDescription: "567 needs access to your library to import practice videos."
         NSSupportsLiveActivities: false

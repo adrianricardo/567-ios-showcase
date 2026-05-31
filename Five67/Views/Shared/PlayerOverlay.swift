@@ -18,13 +18,17 @@ struct RailIcon: View {
     var active: Bool = false
 
     var body: some View {
+        // Over-video chrome: always light-on-dark, never adapts to light/dark.
+        // Active uses a frosted translucent-white fill with a dark glyph so the
+        // glyph stays legible against the bright fill (a white glyph on the old
+        // accent-washed fill was invisible).
         Image(systemName: systemName)
             .font(.system(size: 18, weight: .semibold))
-            .foregroundStyle(active ? Color.white : Color.white.opacity(0.95))
+            .foregroundStyle(active ? Color.black.opacity(0.85) : Color.white.opacity(0.95))
             .frame(width: Spacing.xl5, height: Spacing.xl5)
             .liquidGlass(
                 in: Circle(),
-                tint: active ? Color.accentColor : nil,
+                tint: active ? Color.white.opacity(0.85) : nil,
                 interactive: true
             )
             .shadow(color: .black.opacity(0.25), radius: 4, y: 2)

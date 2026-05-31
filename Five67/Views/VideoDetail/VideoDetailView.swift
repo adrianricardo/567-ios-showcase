@@ -71,7 +71,6 @@ struct VideoDetailView: View {
             .navigationBarBackButtonHidden(true)
             .toolbar(.hidden, for: .navigationBar)
             .toolbar(.hidden, for: .tabBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
             .overlay(alignment: .leading) {
                 Color.clear
                     .frame(width: 20)
@@ -206,6 +205,8 @@ struct VideoDetailView: View {
                 }
             }
             .listStyle(.plain)
+            // Move list is NOT over video — it's system-adaptive chrome.
+            .background(Color(.systemBackground))
         } else {
             emptyMovesHint
         }
@@ -244,7 +245,7 @@ struct VideoDetailView: View {
                 Text("to add your first move")
             }
             .font(.headline.weight(.semibold))
-            .foregroundStyle(.white.opacity(0.85))
+            .foregroundStyle(Color.secondary)
             .multilineTextAlignment(.center)
             .padding(.horizontal, Spacing.xl2)
             Spacer(minLength: 0)
@@ -255,7 +256,8 @@ struct VideoDetailView: View {
         // the centering by reserving that area at the bottom so the hint
         // sits in the middle of the *visible* region, not the full frame.
         .padding(.bottom, Spacing.bottomBarTopOffset)
-        .background(Color.black)
+        // Empty-state hint is NOT over video — system-adaptive chrome.
+        .background(Color(.systemBackground))
     }
 
     // MARK: - Actions

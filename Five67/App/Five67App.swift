@@ -35,6 +35,7 @@ struct Five67App: App {
                         .transition(.identity)
                 }
             }
+            .preferredColorScheme(.dark)
         }
     }
 

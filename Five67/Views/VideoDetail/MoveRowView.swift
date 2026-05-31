@@ -48,12 +48,15 @@ struct MoveRowView: View {
                     Button {
                         showRename = true
                     } label: {
+                        // Quiet, mode-consistent "add" affordance: system fill
+                        // + accent label. The old solid-blue pill glared in the
+                        // (now adaptive) dark move list.
                         Text("Add name")
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color.accentColor)
                             .padding(.horizontal, Spacing.md)
                             .padding(.vertical, Spacing.xs)
-                            .background(Capsule().fill(Color.accentColor))
+                            .background(Capsule().fill(Theme.secondaryChipFill))
                     }
                     .buttonStyle(.plain)
                 }
