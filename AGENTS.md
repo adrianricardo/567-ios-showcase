@@ -8,8 +8,8 @@ and is exposed here through a gitignored symlink `brain -> ../567-platform/brain
 before product/strategy work; start with `brain/README.md`.
 
 If `brain/` is missing (fresh clone), clone `567-platform` as a sibling of this repo and run
-`ln -s ../567-platform/brain brain`. iOS-specific implementation notes still live here under
-`docs/` (Tier-3); the physical split of iOS docs out of the shared brain is a pending follow-up.
+`ln -s ../567-platform/brain brain`. iOS-specific implementation notes (Tier-3) live here under
+`docs/` — see `docs/README.md`; `../brain/synthesized/…` points up into the shared product brain.
 
 ## Build and verification loop
 
