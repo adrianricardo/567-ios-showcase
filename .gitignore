@@ -22,3 +22,7 @@ Package.resolved
 # IDE
 .idea/
 .vscode/
+
+# Shared product brain — lives canonically in ../567-platform/brain.
+# `brain` is a local symlink to it (create with: ln -s ../567-platform/brain brain).
+/brain

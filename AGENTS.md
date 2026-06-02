@@ -1,5 +1,16 @@
 # AGENTS.md — Five67 iOS Agent Rules
 
+## Product brain (shared)
+
+The 567 product brain (strategy, personas, roadmap, decisions, open questions) is **not**
+in this repo. It lives canonically in the `567-platform` monorepo at `567-platform/brain`
+and is exposed here through a gitignored symlink `brain -> ../567-platform/brain`. Read it
+before product/strategy work; start with `brain/README.md`.
+
+If `brain/` is missing (fresh clone), clone `567-platform` as a sibling of this repo and run
+`ln -s ../567-platform/brain brain`. iOS-specific implementation notes still live here under
+`docs/` (Tier-3); the physical split of iOS docs out of the shared brain is a pending follow-up.
+
 ## Build and verification loop
 
 - Prefer the repo `Makefile` over direct Xcode UI work.
