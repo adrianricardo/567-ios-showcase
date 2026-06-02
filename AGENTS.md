@@ -1,11 +1,15 @@
-# AGENTS.md — Five67 iOS Agent Rules
+# 567-ios — Agent Guide
+
+> Entry file for **every** agent (Codex, cloud agents, Claude Code). `CLAUDE.md` is a symlink to this file.
+> For the whole-system map (repos, tiers, brain symlink, contract, agent topology) read
+> `brain/ARCHITECTURE.md`. This repo is the Swift/SwiftUI app; web + backend live in `567-platform`.
 
 ## Product brain (shared)
 
 The 567 product brain (strategy, personas, roadmap, decisions, open questions) is **not**
 in this repo. It lives canonically in the `567-platform` monorepo at `567-platform/brain`
-and is exposed here through a gitignored symlink `brain -> ../567-platform/brain`. Read it
-before product/strategy work; start with `brain/README.md`.
+and is exposed here through a gitignored symlink `brain -> ../567-platform/brain`. Read
+`brain/ARCHITECTURE.md` then `brain/README.md` before product/strategy work.
 
 If `brain/` is missing (fresh clone), clone `567-platform` as a sibling of this repo and run
 `ln -s ../567-platform/brain brain`. iOS-specific implementation notes (Tier-3) live here under
