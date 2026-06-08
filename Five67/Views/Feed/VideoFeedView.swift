@@ -435,6 +435,20 @@ struct VideoFeedView: View {
                     dismissTapCoach()
                 }
         }
+        // The invisible thirds carry no labels, so VoiceOver can't reach the
+        // edge-tap move nav. Collapse them into one element and expose the same
+        // three functions the taps call as named actions (no parallel path).
+        .accessibilityElement()
+        .accessibilityLabel("Move navigation")
+        .accessibilityAction(named: "Previous move") {
+            jumpToPreviousMove()
+            dismissTapCoach()
+        }
+        .accessibilityAction(named: "Play or pause") { togglePlayback() }
+        .accessibilityAction(named: "Next move") {
+            jumpToNextMove()
+            dismissTapCoach()
+        }
     }
 
     @ViewBuilder
