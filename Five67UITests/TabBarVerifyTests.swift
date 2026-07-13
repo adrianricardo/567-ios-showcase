@@ -1,16 +1,19 @@
 import XCTest
 
+@MainActor
 final class TabBarVerifyTests: XCTestCase {
     var app: XCUIApplication!
 
-    override func setUpWithError() throws {
+    private func launchApp() {
         continueAfterFailure = false
         app = XCUIApplication()
+        app.launchArguments.append("-Five67UITestSkipOnboarding")
         app.launch()
         sleep(2)
     }
 
     func testThreeTabsExist() throws {
+        launchApp()
         let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(tabBar.buttons["Library"].waitForExistence(timeout: 5), "Library tab missing")
         XCTAssertTrue(tabBar.buttons["Feed"].exists, "Feed tab missing")
@@ -18,6 +21,7 @@ final class TabBarVerifyTests: XCTestCase {
     }
 
     func testLibraryTabTap() throws {
+        launchApp()
         let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(tabBar.buttons["Library"].waitForExistence(timeout: 5))
         tabBar.buttons["Library"].tap()
@@ -26,6 +30,7 @@ final class TabBarVerifyTests: XCTestCase {
     }
 
     func testStylesTabTap() throws {
+        launchApp()
         let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(tabBar.buttons["Styles"].waitForExistence(timeout: 5))
         tabBar.buttons["Styles"].tap()
@@ -35,22 +40,26 @@ final class TabBarVerifyTests: XCTestCase {
     }
 
     func testAddButtonVisible() throws {
+        launchApp()
         XCTAssertTrue(app.buttons["Add video"].waitForExistence(timeout: 5), "Add video button missing")
     }
 
     func testAddButtonShowsDialog() throws {
+        launchApp()
         let addBtn = app.buttons["Add video"]
         XCTAssertTrue(addBtn.waitForExistence(timeout: 5))
         addBtn.tap()
-        sleep(1)
         let sheet = app.sheets["Add video"]
         let alert = app.alerts["Add video"] 
         let fromPhotos = app.buttons["From Photos"]
-        XCTAssertTrue(sheet.exists || alert.exists || fromPhotos.exists,
-                      "Add video dialog did not appear")
+        let dialogAppeared = sheet.waitForExistence(timeout: 3) ||
+            alert.waitForExistence(timeout: 1) ||
+            fromPhotos.waitForExistence(timeout: 1)
+        XCTAssertTrue(dialogAppeared, "Add video dialog did not appear")
     }
 
     func testScreenshotsAllTabs() throws {
+        launchApp()
         let tabBar = app.tabBars.firstMatch
 
         // Feed tab (default)

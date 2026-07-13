@@ -16,6 +16,20 @@ extension View {
             self.background(.thickMaterial, in: shape)
         }
     }
+
+    /// Official `.glass` button style on iOS 26+ for standalone nav-style
+    /// actions (e.g. a "Done" button over full-bleed video). Falls back to
+    /// `.bordered` pre-iOS 26 since the Glass button style doesn't exist yet.
+    @ViewBuilder
+    func glassNavButtonStyle() -> some View {
+        if #available(iOS 26.0, *) {
+            self.buttonStyle(.glass)
+                .tint(.white)
+        } else {
+            self.buttonStyle(.bordered)
+                .tint(.white)
+        }
+    }
 }
 
 @available(iOS 26.0, *)

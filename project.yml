@@ -110,5 +110,6 @@ schemes:
       gatherCoverageData: true
     run:
       config: Debug
+      storeKitConfiguration: Five67/Resources/StoreKit/Five67.storekit
     archive:
       config: Release

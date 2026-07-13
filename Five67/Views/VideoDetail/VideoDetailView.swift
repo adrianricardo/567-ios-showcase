@@ -6,6 +6,9 @@ struct VideoDetailView: View {
     let video: Video
     let startTime: TimeInterval?
     let onFinish: ((TimeInterval?) -> Void)?
+    private let finishTitle: String?
+    private let secondaryFinishTitle: String?
+    private let showsTitle: Bool
     @State private var controller: PlaybackController
     @State private var activeMoveID: UUID?
     @State private var sortedMoves: [Move] = []
@@ -29,10 +32,16 @@ struct VideoDetailView: View {
     init(
         video: Video,
         startTime: TimeInterval? = nil,
+        finishTitle: String? = nil,
+        secondaryFinishTitle: String? = nil,
+        showsTitle: Bool = true,
         onFinish: ((TimeInterval?) -> Void)? = nil
     ) {
         self.video = video
         self.startTime = startTime
+        self.finishTitle = finishTitle
+        self.secondaryFinishTitle = secondaryFinishTitle
+        self.showsTitle = showsTitle
         self.onFinish = onFinish
         self._controller = State(wrappedValue: PlaybackController(videoURL: video.fileURL))
         self._sortedMoves = State(wrappedValue: video.movesSorted)
@@ -123,26 +132,47 @@ struct VideoDetailView: View {
 
     private var topBar: some View {
         HStack(spacing: Spacing.sm) {
-            Button { finishEditing() } label: {
-                Image(systemName: "chevron.left")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: Spacing.touchTarget, height: Spacing.touchTarget)
+            if finishTitle == nil {
+                Button { finishEditing() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: Spacing.touchTarget, height: Spacing.touchTarget)
+                }
+                .accessibilityLabel("Back")
+            } else {
+                // Balance the trailing Done button so the title stays centered.
+                Color.clear.frame(width: Spacing.touchTarget, height: Spacing.touchTarget)
             }
-            .accessibilityLabel("Back")
 
             Spacer(minLength: 0)
 
-            Text(video.displayName)
+            if showsTitle {
+                Text(video.displayName)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Spacer(minLength: 0)
+            }
+
+            if let finishTitle {
+                Button(finishTitle) { finishEditing() }
+                    .font(.subheadline.weight(.semibold))
+                    .glassNavButtonStyle()
+                    .accessibilityLabel(finishTitle)
+            } else if let secondaryFinishTitle {
+                Button(secondaryFinishTitle) {
+                    finishEditing()
+                }
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .truncationMode(.tail)
-
-            Spacer(minLength: 0)
-
-            // Balance the leading back button so the title stays centered.
-            Color.clear.frame(width: Spacing.touchTarget, height: Spacing.touchTarget)
+                .foregroundStyle(.white.opacity(0.84))
+                .frame(minHeight: Spacing.touchTarget)
+            } else if showsTitle {
+                // Balance the leading back button so the title stays centered.
+                Color.clear.frame(width: Spacing.touchTarget, height: Spacing.touchTarget)
+            }
         }
         .padding(.horizontal, Spacing.sm)
         .frame(height: Spacing.touchTarget)

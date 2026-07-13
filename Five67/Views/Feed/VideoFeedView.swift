@@ -1170,28 +1170,8 @@ struct VideoFeedView: View {
 
     @discardableResult
     private func insertVideo(from result: VideoImportResult) -> Video {
-        let video = Video(
-            displayName: result.displayName,
-            localFilename: result.filename,
-            sourceAssetID: result.sourceID,
-            recordedAt: result.recordedAt,
-            duration: result.duration
-        )
-        modelContext.insert(video)
+        let video = VideoImportPersistence.insertVideo(from: result, in: modelContext)
         selectedIndex = 0
-
-        let videoURL = video.fileURL
-        let videoID = video.id
-        let duration = video.duration
-        Task.detached(priority: .utility) {
-            _ = await ThumbnailService.shared.thumbnails(
-                for: videoURL,
-                videoID: videoID,
-                count: 10,
-                height: 36,
-                duration: duration
-            )
-        }
         return video
     }
 }

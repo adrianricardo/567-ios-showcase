@@ -7,9 +7,13 @@ struct Five67App: App {
     @State private var playbackSession = PlaybackSession()
     @State private var router = AppRouter()
     @State private var styleStore = StyleStore()
+    @State private var unlockStore = UnlockStore()
     @State private var splashFinished = false
 
     init() {
+        if ProcessInfo.processInfo.arguments.contains("-Five67UITestSkipOnboarding") {
+            UserDefaults.standard.set(true, forKey: OnboardingPreferences.Keys.hasCompleted)
+        }
         _loadResult = State(initialValue: Self.loadContainer())
     }
 
@@ -18,11 +22,17 @@ struct Five67App: App {
             ZStack {
                 switch loadResult {
                 case .success(let container):
-                    RootView()
+                    OnboardingGateView {
+                        RootView()
+                    }
                         .modelContainer(container)
                         .environment(playbackSession)
                         .environment(router)
                         .environment(styleStore)
+                        .environment(unlockStore)
+                        .task {
+                            unlockStore.start()
+                        }
                 case .failure(let error):
                     MigrationFailureView(error: error) {
                         Self.wipeDefaultStore()
