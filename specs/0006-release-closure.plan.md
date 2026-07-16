@@ -627,7 +627,7 @@ If App Store Connect or signing access is unavailable, do not claim release. Mar
 | ID | Status | Owner/session | Last update | Notes |
 |---|---|---|---|---|
 | P0 | done | Codex implementation session | 2026-07-16 | Green build/tests/diff check; plan commit `9792afc`; exact Groups 0–5 baseline commit `2bad989` |
-| P1 | done | Codex implementation session | 2026-07-16 | Complete coverage matrix, Warm Stage implementation, accessibility/visual evidence, build/test/fresh-launch verification; atomic commit pending below |
+| P1 | done | Codex implementation session | 2026-07-16 | Complete coverage matrix, Warm Stage implementation, accessibility/visual evidence, green verification; atomic commit `7a1842b` |
 | P2 | pending | - | - | Entitlement-backed paywall; Gate G2 required |
 | P3 | pending | - | - | Integrated release-candidate QA |
 | P4 | pending | - | - | TestFlight/App Review; Gates G4–G5 required |
@@ -636,9 +636,9 @@ Status values: `pending`, `in-progress`, `blocked`, `done`.
 
 ## Handoff
 
-Current state: P0 is complete at clean commit `2bad989`; P1 implementation and verification are complete and ready for the required atomic commit. The implementation session began from the exact intentional Groups 0–5 dirty baseline recorded in `Current state snapshot`; all tracked diffs and untracked design artifacts were reviewed, and the 16 source/test files remained byte-for-byte identical to their recorded SHA-256 baseline through the P0 verification and commit boundary.
+Current state: P0 is complete at clean commit `2bad989`; P1 implementation and verification are complete at atomic commit `7a1842b`. The implementation session began from the exact intentional Groups 0–5 dirty baseline recorded in `Current state snapshot`; all tracked diffs and untracked design artifacts were reviewed, and the 16 source/test files remained byte-for-byte identical to their recorded SHA-256 baseline through the P0 verification and commit boundary.
 
-Next step: create the P1 atomic commit, record its SHA here, then stop. P2 must not begin until Adrian authorizes G2. P3 must not begin until Adrian reviews the P1 coverage matrix/screenshots and satisfies G3.
+Next step: stop at the approval boundary. P2 must not begin until Adrian authorizes G2. P3 must not begin until Adrian reviews the P1 coverage matrix/screenshots and satisfies G3.
 
 Files changed in P0: the existing Groups 0–5 source/test/design baseline was committed exactly as reviewed; stale migration-status wording was reconciled in `docs/design-migration.md`, `docs/README.md`, and `docs/design-foundation-brief.md`; this plan records progress and evidence.
 
@@ -667,6 +667,10 @@ P0 commits:
 
 - `9792afc` — `Agent Codex: add v1.1 release closure plan`
 - `2bad989` — `Agent Codex: complete Warm Stage migration`
+
+P1 commit:
+
+- `7a1842b` — `Agent Codex: apply Warm Stage across the app`
 
 P0 boundary status: `git status --short` produced no output immediately after `2bad989`; there were no unexplained pre-P1 modifications.
 
@@ -703,7 +707,8 @@ Approval record:
 
 - **G1 authorized (2026-07-16):** Adrian explicitly instructed this implementation session to implement the plan sequentially beginning with P0, preserve the approved Groups 0–5 baseline exactly, and obey the approval gates. This authorizes the P0 baseline commits after the required evidence is green.
 - **G2 not yet authorized:** do not begin P2 paywall implementation until Adrian explicitly accepts the unlimited-videos/styles-only release cut and removal of iCloud cleanup copy.
-- **G3–G5 not yet authorized/satisfied.**
+- **G3 ready for Adrian review, not yet satisfied:** the complete matrix is `docs/design-system-coverage.md`; representative ignored screenshots are under `build/release-evidence/design/`. Do not begin P3 until Adrian accepts them.
+- **G4–G5 not yet authorized/satisfied.**
 
 Open questions:
 
