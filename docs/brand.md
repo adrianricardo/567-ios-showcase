@@ -14,6 +14,8 @@ The brand should feel native, direct, high-contrast, and physical. It is closer 
 
 ## Visual System
 
+> The current iOS implementation contract is [`design-system.md`](design-system.md). It supersedes the older blue/glow palette below for in-app UI.
+
 567 has two visual contexts.
 
 ### Immersive Practice

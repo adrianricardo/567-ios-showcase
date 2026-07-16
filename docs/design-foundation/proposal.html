@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>567 design foundation proposal</title>
+  <style>
+    :root {
+      --canvas: #070707;
+      --surface: #1b1b1b;
+      --raised: #252525;
+      --primary: #f7f3e9;
+      --secondary: #b8b1a7;
+      --ink: #10100f;
+      --stroke: rgba(255,255,255,.10);
+      --salsa: #ff6b4a;
+      --success: #55c878;
+      --warning: #f0a43a;
+      --danger: #ff6259;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px;
+      display: flex;
+      gap: 32px;
+      align-items: flex-start;
+      background: #d6d1c8;
+      color: var(--primary);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+    }
+    .phone {
+      position: relative;
+      width: 390px;
+      height: 844px;
+      flex: 0 0 390px;
+      overflow: hidden;
+      background: var(--canvas);
+      border-radius: 42px;
+      box-shadow: 0 24px 64px rgba(0,0,0,.28);
+    }
+    .status {
+      height: 48px;
+      padding: 17px 25px 0;
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: .2px;
+    }
+    .island {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      width: 112px;
+      height: 30px;
+      transform: translateX(-50%);
+      border-radius: 18px;
+      background: #000;
+    }
+    .sys { color: var(--primary); font-size: 12px; letter-spacing: 2px; }
+    .eyebrow { color: var(--secondary); font-size: 12px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; }
+    h1 { margin: 0; font-size: 34px; line-height: 1.04; letter-spacing: -1.1px; }
+    h2 { margin: 0; font-size: 24px; line-height: 1.08; letter-spacing: -.5px; }
+    p { margin: 0; }
+    .secondary { color: var(--secondary); }
+    .onboarding-content { padding: 18px 22px 132px; }
+    .onboarding-copy { display: grid; gap: 10px; margin: 12px 0 24px; }
+    .onboarding-copy p { max-width: 320px; font-size: 16px; line-height: 1.38; }
+    .style-list { display: grid; gap: 9px; }
+    .style-row {
+      position: relative;
+      min-height: 59px;
+      padding: 0 15px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border: 1px solid var(--stroke);
+      border-radius: 17px;
+      background: var(--surface);
+      font-size: 17px;
+      font-weight: 650;
+    }
+    .style-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--dot); }
+    .style-row .label { flex: 1; }
+    .check {
+      width: 23px;
+      height: 23px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--salsa);
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 900;
+    }
+    .action-dock {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 13px 22px 27px;
+      border-top: 1px solid var(--stroke);
+      background: rgba(7,7,7,.96);
+    }
+    .primary-button {
+      height: 58px;
+      padding: 0 17px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-radius: 18px;
+      background: var(--primary);
+      color: var(--ink);
+      font-size: 17px;
+      font-weight: 800;
+    }
+    .primary-button small { display: block; margin-top: 2px; color: rgba(16,16,15,.62); font-size: 11px; font-weight: 650; }
+    .primary-button .arrow { margin-left: auto; font-size: 20px; }
+
+    .library { padding: 9px 19px 102px; }
+    .titlebar { display: flex; align-items: center; margin: 5px 0 15px; }
+    .style-filter {
+      margin-left: auto;
+      height: 34px;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      border: 1px solid var(--stroke);
+      border-radius: 17px;
+      background: var(--surface);
+      font-size: 12px;
+      font-weight: 750;
+    }
+    .tabs {
+      height: 46px;
+      padding: 4px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      border: 1px solid var(--stroke);
+      border-radius: 16px;
+      background: var(--surface);
+    }
+    .tab { position: relative; display: grid; place-items: center; color: var(--secondary); font-size: 14px; font-weight: 750; }
+    .tab.active { background: var(--raised); border-radius: 12px; }
+    .search {
+      height: 45px;
+      margin: 11px 0 16px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--stroke);
+      border-radius: 16px;
+      background: var(--surface);
+      color: var(--secondary);
+      font-size: 14px;
+    }
+    .section-label { margin: 14px 3px 8px; color: var(--secondary); font-size: 12px; font-weight: 700; letter-spacing: .2px; }
+    .move-card {
+      position: relative;
+      min-height: 76px;
+      margin-bottom: 9px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      overflow: hidden;
+      border: 1px solid var(--stroke);
+      border-radius: 17px;
+      background: var(--surface);
+    }
+    .thumb { width: 70px; height: 52px; flex: 0 0 70px; border-radius: 10px; background: #754033; position: relative; overflow: hidden; }
+    .thumb::before, .thumb::after { content: ""; position: absolute; width: 18px; height: 34px; bottom: 5px; border-radius: 10px 10px 5px 5px; background: #e8c3a1; transform: rotate(-11deg); }
+    .thumb::before { left: 20px; }
+    .thumb::after { left: 40px; background: #9eb5c8; transform: rotate(13deg); }
+    .move-copy { min-width: 0; flex: 1; }
+    .move-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 15px; font-weight: 750; }
+    .meta { margin-top: 5px; color: var(--secondary); font-size: 11px; }
+    .wave { color: var(--salsa); font-size: 15px; letter-spacing: -2px; }
+    .native-tabbar {
+      position: absolute;
+      left: 20px;
+      right: 20px;
+      bottom: 17px;
+      height: 66px;
+      padding: 5px 8px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 54px;
+      gap: 3px;
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 28px;
+      background: rgba(38,38,38,.94);
+      box-shadow: 0 10px 28px rgba(0,0,0,.45);
+    }
+    .nav-item { display: grid; place-items: center; align-content: center; gap: 2px; color: var(--secondary); font-size: 9px; font-weight: 650; }
+    .nav-item b { font-size: 18px; }
+    .nav-item.active { background: rgba(255,255,255,.11); border-radius: 20px; }
+    .nav-add { width: 44px; height: 44px; align-self: center; justify-self: center; display: grid; place-items: center; border-radius: 50%; background: var(--primary); color: var(--ink); font-size: 23px; font-weight: 500; }
+
+    .practice .status { position: relative; z-index: 4; background: #000; }
+    .video-top { position: relative; height: 278px; background: #703b32; overflow: hidden; }
+    .video-top::before, .video-top::after { content: ""; position: absolute; bottom: 52px; width: 62px; height: 132px; border-radius: 30px 30px 13px 13px; background: #e6bf9b; transform: rotate(-8deg); }
+    .video-top::before { left: 98px; }
+    .video-top::after { left: 204px; background: #9bb0c6; transform: rotate(9deg); }
+    .video-chrome { position: absolute; z-index: 2; left: 14px; right: 14px; top: 10px; display: flex; align-items: center; }
+    .circle-control { width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.18); border-radius: 50%; background: rgba(18,18,18,.72); font-size: 19px; }
+    .video-title { flex: 1; text-align: center; font-size: 13px; font-weight: 700; text-shadow: 0 1px 3px #000; }
+    .play-control { position: absolute; z-index: 2; top: 105px; left: 168px; width: 56px; height: 56px; display: grid; place-items: center; border-radius: 50%; background: rgba(16,16,15,.78); border: 1px solid rgba(255,255,255,.22); font-size: 23px; }
+    .timeline { position: absolute; z-index: 2; left: 20px; right: 20px; bottom: 20px; }
+    .time-copy { display: flex; justify-content: space-between; margin-bottom: 7px; font-size: 11px; font-weight: 650; }
+    .track { height: 4px; background: rgba(255,255,255,.28); border-radius: 3px; }
+    .track span { position: relative; display: block; width: 48%; height: 100%; background: var(--salsa); border-radius: 3px; }
+    .track span::after { content: ""; position: absolute; right: -5px; top: -4px; width: 12px; height: 12px; border-radius: 50%; background: var(--primary); }
+    .detail-sheet { position: relative; height: 518px; margin-top: -12px; padding: 24px 19px 104px; border-radius: 22px 22px 0 0; background: var(--canvas); }
+    .detail-title { display: flex; align-items: flex-start; }
+    .detail-title .copy { flex: 1; }
+    .detail-title p { margin-top: 6px; font-size: 13px; }
+    .quiet-icon { width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid var(--stroke); border-radius: 14px; background: var(--surface); color: var(--secondary); }
+    .practice-primary { margin: 18px 0 17px; }
+    .loop-section { display: flex; justify-content: space-between; align-items: center; margin: 0 3px 9px; }
+    .loop-section span:last-child { color: var(--secondary); font-size: 11px; }
+    .loop-row { position: relative; min-height: 69px; margin-bottom: 9px; padding: 10px 12px 10px 18px; display: flex; align-items: center; gap: 11px; overflow: hidden; border: 1px solid var(--stroke); border-radius: 16px; background: var(--surface); }
+    .loop-index { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; background: rgba(255,255,255,.07); color: var(--secondary); font-size: 12px; font-weight: 750; }
+    .loop-state { margin-left: auto; color: var(--secondary); font-size: 11px; }
+  </style>
+</head>
+<body>
+  <section class="phone onboarding" data-snapshot="onboarding">
+    <div class="island"></div>
+    <div class="status"><span>9:41</span><span class="sys">●●● ◒ ▰</span></div>
+    <main class="onboarding-content">
+      <div class="eyebrow">Set up your library · 4 of 9</div>
+      <div class="onboarding-copy">
+        <h1>What do you dance most?</h1>
+        <p class="secondary">Choose where you want your library to start. You can change this later.</p>
+      </div>
+      <div class="style-list">
+        <div class="style-row selected" aria-label="Salsa, selected">
+          <span class="style-dot" style="--dot: var(--salsa)"></span><span class="label">Salsa</span>
+          <span class="check">✓</span>
+        </div>
+        <div class="style-row"><span class="style-dot" style="--dot:#ffd166"></span><span class="label">Cumbia</span></div>
+        <div class="style-row"><span class="style-dot" style="--dot:#ff9eb5"></span><span class="label">Bachata</span></div>
+        <div class="style-row"><span class="style-dot" style="--dot:#b7a0ff"></span><span class="label">Kizomba</span></div>
+        <div class="style-row"><span class="style-dot" style="--dot:#71d7e8"></span><span class="label">Zouk</span></div>
+        <div class="style-row"><span class="style-dot" style="--dot:#b8f05a"></span><span class="label">Merengue</span></div>
+      </div>
+    </main>
+    <footer class="action-dock">
+      <div class="primary-button"><span>Continue</span><span class="arrow">→</span></div>
+    </footer>
+  </section>
+
+  <section class="phone library-phone" data-snapshot="library">
+    <div class="island"></div>
+    <div class="status"><span>9:41</span><span class="sys">●●● ◒ ▰</span></div>
+    <main class="library">
+      <div class="titlebar"><h1>Library</h1><div class="style-filter"><span class="style-dot" style="--dot:var(--salsa)"></span>Salsa⌄</div></div>
+      <div class="tabs"><div class="tab active">Moves</div><div class="tab">Videos</div></div>
+      <div class="search">⌕ <span>Search moves and videos</span></div>
+      <div class="section-label">Tuesday, July 9 · Studio 22</div>
+      <div class="move-card playing">
+        <div class="thumb"></div><div class="move-copy"><div class="move-name">Cross-body lead</div><div class="meta">0:14 loop · On1 partnerwork</div></div>
+        <span class="wave" aria-label="Playing">▮▯▮</span>
+      </div>
+      <div class="move-card">
+        <div class="thumb" style="background:#4b535c"></div><div class="move-copy"><div class="move-name">Inside turn setup</div><div class="meta">0:11 loop · On1 partnerwork</div></div><span class="secondary">›</span>
+      </div>
+      <div class="section-label">Thursday, July 4 · Dance Center</div>
+      <div class="move-card">
+        <div class="thumb" style="background:#5d3d52"></div><div class="move-copy"><div class="move-name">Suzy Q footwork</div><div class="meta">0:09 loop · Shines</div></div><span class="secondary">›</span>
+      </div>
+      <div class="move-card">
+        <div class="thumb" style="background:#3f594e"></div><div class="move-copy"><div class="move-name">Right-turn timing</div><div class="meta">0:16 loop · Fundamentals</div></div><span class="secondary">›</span>
+      </div>
+    </main>
+    <nav class="native-tabbar">
+      <div class="nav-item active"><b>▧</b><span>Library</span></div><div class="nav-item"><b>▷</b><span>Feed</span></div><div class="nav-item"><b>≡</b><span>Styles</span></div><div class="nav-add">＋</div>
+    </nav>
+  </section>
+
+  <section class="phone practice" data-snapshot="practice">
+    <div class="island"></div>
+    <div class="status"><span>9:41</span><span class="sys">●●● ◒ ▰</span></div>
+    <div class="video-top">
+      <div class="video-chrome"><div class="circle-control">‹</div><div class="video-title">Tuesday Salsa · Studio 22</div><div class="circle-control">•••</div></div>
+      <div class="play-control">▶</div>
+      <div class="timeline"><div class="time-copy"><span>0:42</span><span>1:28</span></div><div class="track"><span></span></div></div>
+    </div>
+    <main class="detail-sheet">
+      <div class="detail-title"><div class="copy"><h2>Cross-body lead</h2><p class="secondary">Salsa · On1 partnerwork · 14 sec</p></div><div class="quiet-icon">✎</div></div>
+      <div class="primary-button practice-primary"><span>Practice this loop<small>Repeats until you stop</small></span><span class="arrow">▶</span></div>
+      <div class="loop-section"><span class="eyebrow">Class moves</span><span>2 of 4</span></div>
+      <div class="loop-row"><div class="loop-index">01</div><div><div class="move-name">Basic timing</div><div class="meta">0:00–0:18</div></div><div class="loop-state" aria-label="Completed">✓</div></div>
+      <div class="loop-row active"><div class="loop-index">02</div><div><div class="move-name">Cross-body lead</div><div class="meta">0:18–0:32</div></div><div class="loop-state"><span class="wave" aria-label="Playing">▮▯▮</span></div></div>
+      <div class="loop-row"><div class="loop-index">03</div><div><div class="move-name">Inside turn setup</div><div class="meta">0:32–0:54</div></div><div class="loop-state">Next</div></div>
+    </main>
+  </section>
+</body>
+</html>

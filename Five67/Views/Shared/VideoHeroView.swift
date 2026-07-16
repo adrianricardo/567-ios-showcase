@@ -15,12 +15,15 @@ struct VideoHeroView<Rail: View>: View {
     let video: Video
     let moves: [Move]
     let allowsMarkerEditing: Bool
+    var accentColor: Color = Color.accentColor
     var showsPlaceholderWhenEmpty: Bool = false
     var onTapSegment: ((Move, TimeInterval) -> Void)? = nil
     var onHandleDragComplete: (() -> Void)? = nil
+    var focusesPlaybackOnAppear = false
     @ViewBuilder let rail: () -> Rail
 
     @Environment(PlaybackSession.self) private var session
+    @AccessibilityFocusState private var playbackAccessibilityFocus: Bool
 
     private var playerAspectRatio: CGFloat {
         let size = controller.videoSize
@@ -36,6 +39,15 @@ struct VideoHeroView<Rail: View>: View {
                     .aspectRatio(playerAspectRatio, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .padding(Spacing.md)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Video playback")
+                    .accessibilityValue(playbackAccessibilityValue)
+                    .accessibilityHint(controller.isPlaying ? "Double tap to pause" : "Double tap to play")
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityFocused($playbackAccessibilityFocus)
+                    .accessibilityAction {
+                        controller.toggle()
+                    }
             }
             .frame(maxWidth: .infinity)
             .frame(height: 320)
@@ -43,6 +55,7 @@ struct VideoHeroView<Rail: View>: View {
                 TimestampPill(time: controller.currentTime)
                     .padding(.top, Spacing.lgPlus)
                     .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
             .overlay(alignment: .topTrailing) {
                 rail()
@@ -56,6 +69,7 @@ struct VideoHeroView<Rail: View>: View {
                 videoURL: video.fileURL,
                 moves: moves,
                 allowsMarkerEditing: allowsMarkerEditing,
+                accentColor: accentColor,
                 fillsVisibleRange: true,
                 showsPlaceholderWhenEmpty: showsPlaceholderWhenEmpty,
                 onTapSegment: onTapSegment,
@@ -69,10 +83,22 @@ struct VideoHeroView<Rail: View>: View {
         .background(Color.black.ignoresSafeArea(edges: .top))
         .onAppear {
             controller.isMuted = session.isMuted
+            if focusesPlaybackOnAppear {
+                Task { @MainActor in
+                    await Task.yield()
+                    playbackAccessibilityFocus = true
+                }
+            }
         }
         .onChange(of: session.isMuted) { _, newValue in
             controller.isMuted = newValue
         }
+    }
+
+    private var playbackAccessibilityValue: String {
+        let state = controller.isPlaying ? "Playing" : "Paused"
+        let duration = controller.duration > 0 ? controller.duration : video.duration
+        return "\(state), \(formatTime(controller.currentTime)) of \(formatTime(duration))"
     }
 }
 
@@ -89,6 +115,7 @@ struct MuteRailButton: View {
             RailIcon(systemName: session.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
         }
         .accessibilityLabel(session.isMuted ? "Unmute" : "Mute")
+        .frame(minWidth: Spacing.touchTarget, minHeight: Spacing.touchTarget)
     }
 }
 
@@ -102,7 +129,9 @@ struct LoopRailButton: View {
         } label: {
             RailIcon(systemName: "repeat", active: controller.isLooping)
         }
-        .accessibilityLabel(controller.isLooping ? "Loop on" : "Loop off")
+        .accessibilityLabel("Loop")
+        .accessibilityValue(controller.isLooping ? "On" : "Off")
+        .frame(minWidth: Spacing.touchTarget, minHeight: Spacing.touchTarget)
     }
 }
 
@@ -118,5 +147,6 @@ struct SplitRailButton: View {
         }
         .disabled(controller.duration == 0)
         .accessibilityLabel("Split")
+        .frame(minWidth: Spacing.touchTarget, minHeight: Spacing.touchTarget)
     }
 }

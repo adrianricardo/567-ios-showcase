@@ -5,6 +5,10 @@ import PhotosUI
 import UIKit
 
 struct VideoFeedView: View {
+    private enum AccessibilityFocus: Hashable {
+        case selectedResult
+    }
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var systemColorScheme
     @Environment(PlaybackSession.self) private var session
@@ -34,6 +38,8 @@ struct VideoFeedView: View {
     @State private var importError: String?
     @State private var showError = false
     @State private var editorStartTime: TimeInterval?
+    @State private var shouldFocusCompletedResult = false
+    @AccessibilityFocusState private var accessibilityFocus: AccessibilityFocus?
 
     // Pending feed move landing from router (replacing the old pane → feed handoff).
     @State private var pendingFeedMove: PendingFeedMove?
@@ -146,6 +152,7 @@ struct VideoFeedView: View {
                         onFinish: { newMarkedTime in
                             if let t = newMarkedTime {
                                 editorStartTime = t
+                                shouldFocusCompletedResult = true
                             }
                         }
                     )
@@ -230,6 +237,9 @@ struct VideoFeedView: View {
         .onChange(of: router.selectedTab) { _, new in
             if new == .feed {
                 resumeFeedAfterPane()
+                if router.feedFocusRequestID != nil {
+                    focusSelectedResult(consumeRouterRequest: true)
+                }
             } else {
                 activeController?.pause()
             }
@@ -238,6 +248,10 @@ struct VideoFeedView: View {
             guard let selection else { return }
             applyPendingSelection(selection)
             router.pendingFeedSelection = nil
+        }
+        .onChange(of: router.feedFocusRequestID) { _, requestID in
+            guard requestID != nil, router.selectedTab == .feed else { return }
+            focusSelectedResult(consumeRouterRequest: true)
         }
         .onChange(of: router.addVideoRequested) { _, requested in
             guard requested else { return }
@@ -263,6 +277,10 @@ struct VideoFeedView: View {
                 }
                 editorStartTime = nil
                 activeController?.play()
+                if shouldFocusCompletedResult {
+                    shouldFocusCompletedResult = false
+                    focusSelectedResult()
+                }
             }
         }
         .onChange(of: showSwipeCoach) { _, _ in
@@ -511,6 +529,12 @@ struct VideoFeedView: View {
                     .transaction { transaction in
                         transaction.animation = nil
                     }
+                    .accessibilityLabel("Current move")
+                    .accessibilityValue(
+                        "\(feedTitle(for: video)), \(formatTime(controller?.currentTime ?? 0))"
+                    )
+                    .accessibilityIdentifier("feed-current-result")
+                    .accessibilityFocused($accessibilityFocus, equals: .selectedResult)
 
                 if isActive {
                     topActionCluster
@@ -889,6 +913,16 @@ struct VideoFeedView: View {
             selectedIndex = idx
         }
         Haptics.light()
+    }
+
+    private func focusSelectedResult(consumeRouterRequest: Bool = false) {
+        Task { @MainActor in
+            await Task.yield()
+            accessibilityFocus = .selectedResult
+            if consumeRouterRequest {
+                router.feedFocusRequestID = nil
+            }
+        }
     }
 
     private func openEditor() {

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(AppRouter.self) private var router
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Last real (non-`.add`) tab, so selecting the detached add control can
     /// restore the visible content without a flicker.
@@ -15,14 +16,12 @@ struct RootView: View {
                     activeVideoID: router.currentFeedVideoID,
                     activeMoveID: router.currentFeedMoveID,
                     onSelectVideo: { video in
-                        router.pendingFeedSelection = FeedSelection(videoID: video.id, moveID: nil)
-                        router.selectedTab = .feed
+                        router.showInFeed(FeedSelection(videoID: video.id, moveID: nil))
                     },
                     onSelectMove: { move in
                         if let videoID = move.video?.id {
-                            router.pendingFeedSelection = FeedSelection(videoID: videoID, moveID: move.id)
+                            router.showInFeed(FeedSelection(videoID: videoID, moveID: move.id))
                         }
-                        router.selectedTab = .feed
                     },
                     onImportPhotos: {
                         router.addVideoRequested = true
@@ -51,7 +50,7 @@ struct RootView: View {
         }
         .tint(.primary)
         .toolbarVisibility(router.hidesBottomChrome ? .hidden : .automatic, for: .tabBar)
-        .animation(.easeInOut(duration: 0.2), value: router.hidesBottomChrome)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: router.hidesBottomChrome)
         .onChange(of: router.selectedTab) { _, newValue in
             guard newValue == .add else {
                 previousTab = newValue

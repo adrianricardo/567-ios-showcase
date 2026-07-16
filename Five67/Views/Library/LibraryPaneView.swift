@@ -23,6 +23,12 @@ private struct PaneMoveGroup: Identifiable {
 /// list into one surface, scoped by the global style mode. Tapping a row hands
 /// selection back to the feed via callbacks wired in RootView.
 struct LibraryPaneView: View {
+    private enum AccessibilityFocus: Hashable {
+        case header
+        case move(UUID)
+        case video(UUID)
+    }
+
     let activeVideoID: UUID?
     let activeMoveID: UUID?
     let onSelectVideo: (Video) -> Void
@@ -32,12 +38,16 @@ struct LibraryPaneView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(StyleStore.self) private var styleStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+    @Environment(AppRouter.self) private var router
 
     @Query(sort: [SortDescriptor(\Video.importedAt, order: .reverse)])
     private var allVideos: [Video]
 
     @AppStorage("libraryPaneTab") private var tab: PaneTab = .moves
     @State private var search = ""
+    @AccessibilityFocusState private var accessibilityFocus: AccessibilityFocus?
 
     @State private var deleteVideoTarget: Video?
     @State private var showDeleteVideoConfirm = false
@@ -89,14 +99,25 @@ struct LibraryPaneView: View {
 
     private var isEmpty: Bool { styleVideos.isEmpty }
 
+    private var accentColor: Color {
+        styleStore.accent?.color ?? Theme.stagePrimary
+    }
+
+    private var stageStroke: Color {
+        colorSchemeContrast == .increased ? Theme.stageSecondary.opacity(0.5) : Theme.stageStroke
+    }
+
     var body: some View {
         VStack(spacing: Spacing.none) {
+            libraryHeader
+                .padding(.top, Spacing.lg)
             tabPicker
-                .padding(.top, Spacing.mdPlus)
             searchField
             content
         }
-        .background(Color(.systemBackground))
+        .foregroundStyle(Theme.stagePrimary)
+        .background(Theme.stageBackground)
+        .preferredColorScheme(.dark)
         .photosExportAttachments(
             isExporting: $isExporting,
             showExportTypeDialog: $showExportTypeDialog,
@@ -120,15 +141,77 @@ struct LibraryPaneView: View {
             }
             Button("Cancel", role: .cancel) {}
         }
+        .onAppear(perform: focusPendingArrival)
+        .onChange(of: router.pendingLibraryArrival) { _, _ in
+            focusPendingArrival()
+        }
+    }
+
+    private var libraryHeader: some View {
+        HStack(alignment: .center, spacing: Spacing.md) {
+            Text("Library")
+                .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                .tracking(-0.8)
+                .accessibilityFocused($accessibilityFocus, equals: .header)
+
+            Spacer()
+
+            HStack(spacing: Spacing.sm) {
+                if styleStore.activeStyle != nil {
+                    Circle()
+                        .fill(accentColor)
+                        .frame(width: 8, height: 8)
+                }
+                Text(styleStore.label)
+                    .font(.caption.weight(.bold))
+            }
+            .foregroundStyle(Theme.stagePrimary)
+            .padding(.horizontal, Spacing.md)
+            .frame(minHeight: 36)
+            .background(Theme.stageSurface, in: Capsule())
+            .overlay { Capsule().stroke(stageStroke, lineWidth: 1) }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Style filter: \(styleStore.label)")
+        }
+        .padding(.horizontal, Spacing.lg)
+        .padding(.bottom, Spacing.md)
     }
 
     private var tabPicker: some View {
-        Picker("View", selection: $tab) {
+        HStack(spacing: Spacing.xs) {
             ForEach(PaneTab.allCases) { t in
-                Text(t.label).tag(t)
+                Button {
+                    if reduceMotion {
+                        tab = t
+                    } else {
+                        withAnimation(.snappy(duration: 0.24, extraBounce: 0.03)) {
+                            tab = t
+                        }
+                    }
+                } label: {
+                    Text(t.label)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(Theme.stageSecondary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(
+                            tab == t ? Theme.stageRaisedSurface : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        )
+                }
+                .buttonStyle(.plain)
+                .frame(minWidth: Spacing.touchTarget, minHeight: Spacing.touchTarget)
+                .accessibilityLabel(t.label)
+                .accessibilityValue(tab == t ? "Selected" : "")
+                .accessibilityAddTraits(tab == t ? .isSelected : [])
             }
         }
-        .pickerStyle(.segmented)
+        .padding(Spacing.xs)
+        .background(Theme.stageSurface, in: RoundedRectangle(cornerRadius: 19, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 19, style: .continuous)
+                .stroke(stageStroke, lineWidth: 1)
+        }
         .padding(.horizontal, Spacing.lg)
         .padding(.bottom, Spacing.smPlus)
     }
@@ -136,7 +219,7 @@ struct LibraryPaneView: View {
     private var searchField: some View {
         HStack(spacing: Spacing.sm) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.stageSecondary)
             TextField("Search moves and videos", text: $search)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -148,14 +231,20 @@ struct LibraryPaneView: View {
                     search = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Theme.stageSecondary)
                 }
                 .buttonStyle(.plain)
+                .frame(minWidth: Spacing.touchTarget, minHeight: Spacing.touchTarget)
+                .accessibilityLabel("Clear search")
             }
         }
         .padding(.horizontal, Spacing.mdPlus)
         .padding(.vertical, Spacing.smPlus)
-        .background(Color(.secondarySystemFill), in: Capsule())
+        .background(Theme.stageSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(stageStroke, lineWidth: 1)
+        }
         .padding(.horizontal, Spacing.lg)
         .padding(.bottom, Spacing.md)
     }
@@ -166,11 +255,25 @@ struct LibraryPaneView: View {
     private var content: some View {
         if isEmpty {
             emptyState
-        } else if tab == .moves {
-            movesList
         } else {
-            videosList
+            ZStack {
+                if tab == .moves {
+                    movesList
+                        .transition(modeTransition)
+                } else {
+                    videosList
+                        .transition(modeTransition)
+                }
+            }
+            .animation(reduceMotion ? .easeOut(duration: 0.12) : .smooth(duration: 0.26), value: tab)
         }
+    }
+
+    private var modeTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return tab == .videos
+            ? .asymmetric(insertion: .push(from: .trailing), removal: .push(from: .leading))
+            : .asymmetric(insertion: .push(from: .leading), removal: .push(from: .trailing))
     }
 
     private var movesList: some View {
@@ -180,20 +283,27 @@ struct LibraryPaneView: View {
                     ForEach(group.moves) { move in
                         MoveRowView(
                             move: move,
-                            isActive: activeMoveID == move.id,
+                            isActive: move.id == activeMoveID,
                             onTap: { onSelectMove(move) },
                             onDelete: { deleteMove(move) },
                             onRename: { newName in rename(move, to: newName) },
-                            onExclude: { toggleExclude(move) }
+                            onExclude: { toggleExclude(move) },
+                            accentColor: playbackAccent(for: move.video)
                         )
+                        .accessibilityFocused($accessibilityFocus, equals: .move(move.id))
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(stageStroke, lineWidth: 1)
+                        }
                         .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets())
+                        .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.lg, bottom: Spacing.xs, trailing: Spacing.lg))
                         .listRowBackground(Color.clear)
                     }
                 } header: {
                     Text(group.title)
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.stageSecondary)
                         .textCase(nil)
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.lg, bottom: Spacing.xs, trailing: Spacing.lg))
@@ -215,6 +325,8 @@ struct LibraryPaneView: View {
         .scrollIndicators(.hidden)
         .contentMargins(.top, Spacing.none, for: .scrollContent)
         .contentMargins(.bottom, Spacing.bottomBarClearance, for: .scrollContent)
+        .scrollContentBackground(.hidden)
+        .background(Theme.stageBackground)
     }
 
     private var videosList: some View {
@@ -227,18 +339,33 @@ struct LibraryPaneView: View {
                         VideoRowView(video: video)
                         if video.id == activeVideoID {
                             Image(systemName: "waveform")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(Theme.nowPlayingIndicator)
+                                .font(.body.weight(.bold))
+                                .foregroundStyle(playbackAccent(for: video))
+                                .frame(minWidth: Spacing.touchTarget, minHeight: Spacing.touchTarget)
+                                .accessibilityHidden(true)
                         }
+                    }
+                    .foregroundStyle(Theme.stagePrimary)
+                    .padding(.horizontal, Spacing.md)
+                    .padding(.vertical, Spacing.sm)
+                    .background(Theme.stageSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(stageStroke, lineWidth: 1)
                     }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .accessibilityValue(video.id == activeVideoID ? "Playing" : "")
+                .accessibilityFocused($accessibilityFocus, equals: .video(video.id))
+                .accessibilityAction(named: "Delete") {
+                    deleteVideoTarget = video
+                    showDeleteVideoConfirm = true
+                }
                 .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: Spacing.xsPlus, leading: Spacing.lg, bottom: Spacing.xsPlus, trailing: Spacing.lg))
-                .listRowBackground(
-                    video.id == activeVideoID ? Theme.rowActiveBackground : Color.clear
-                )
+                .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.lg, bottom: Spacing.xs, trailing: Spacing.lg))
+                .listRowBackground(Color.clear)
                 .swipeActions(edge: .trailing) {
                     Button {
                         deleteVideoTarget = video
@@ -261,6 +388,8 @@ struct LibraryPaneView: View {
         .listStyle(.plain)
         .scrollIndicators(.hidden)
         .contentMargins(.bottom, Spacing.bottomBarClearance, for: .scrollContent)
+        .scrollContentBackground(.hidden)
+        .background(Theme.stageBackground)
     }
 
     private var emptyState: some View {
@@ -268,13 +397,14 @@ struct LibraryPaneView: View {
             Spacer(minLength: 0)
             Image(systemName: "play.rectangle.on.rectangle.fill")
                 .font(.system(size: 56, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.stageSecondary)
+                .accessibilityHidden(true)
             VStack(spacing: Spacing.xsPlus) {
                 Text("Drop in a dance video")
                     .font(.title2.weight(.bold))
                 Text("Import a practice video to start building your library.")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.stageSecondary)
                     .multilineTextAlignment(.center)
             }
             VStack(spacing: Spacing.md) {
@@ -282,21 +412,17 @@ struct LibraryPaneView: View {
                     onImportPhotos()
                 } label: {
                     Label("Import from Photos", systemImage: "photo.on.rectangle")
-                        .font(.headline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: Spacing.primaryButtonHeight)
-                        .background(Color.accentColor, in: Capsule())
-                        .foregroundStyle(.white)
                 }
+                .buttonStyle(StagePrimaryActionButtonStyle())
                 Button {
                     onImportFiles()
                 } label: {
                     Label("Import from Files", systemImage: "folder")
                         .font(.headline.weight(.semibold))
-                        .foregroundStyle(Color.primary)
+                        .foregroundStyle(Theme.stagePrimary)
                         .frame(maxWidth: .infinity)
-                        .frame(height: Spacing.primaryButtonHeight)
-                        .background(Theme.secondaryChipFill, in: Capsule())
+                        .frame(minHeight: 56)
+                        .background(Theme.stageSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
             }
             .padding(.horizontal, Spacing.xl3)
@@ -307,8 +433,39 @@ struct LibraryPaneView: View {
 
     // MARK: - Move helpers
 
+    private func focusPendingArrival() {
+        guard let arrival = router.pendingLibraryArrival else { return }
+        router.pendingLibraryArrival = nil
+
+        Task { @MainActor in
+            await Task.yield()
+            guard let videoID = arrival.videoID else {
+                accessibilityFocus = .header
+                return
+            }
+
+            if tab == .moves,
+               let move = moveGroups
+                .flatMap(\.moves)
+                .first(where: { $0.video?.id == videoID }) {
+                accessibilityFocus = .move(move.id)
+            } else if tab == .videos,
+                      searchedVideos.contains(where: { $0.id == videoID }) {
+                accessibilityFocus = .video(videoID)
+            } else {
+                accessibilityFocus = .header
+            }
+        }
+    }
+
     private func groupTitle(for video: Video) -> String {
-        (video.recordedAt ?? video.importedAt).formatted(date: .long, time: .omitted)
+        let date = (video.recordedAt ?? video.importedAt).formatted(date: .long, time: .omitted)
+        return "\(date) · \(video.style?.name ?? "Unsorted")"
+    }
+
+    private func playbackAccent(for video: Video?) -> Color {
+        guard let video, let style = video.style else { return Theme.stagePrimary }
+        return StyleAccentPalette.accent(forName: style.name, id: style.id)?.color ?? Theme.stagePrimary
     }
 
     private func rename(_ move: Move, to name: String) {

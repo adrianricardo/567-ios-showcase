@@ -3,6 +3,7 @@ import SwiftUI
 
 struct OnboardingGateView<Content: View>: View {
     @Environment(AppRouter.self) private var router
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(OnboardingPreferences.Keys.hasCompleted) private var hasCompletedOnboarding = false
     @Query private var videos: [Video]
 
@@ -21,14 +22,18 @@ struct OnboardingGateView<Content: View>: View {
                 OnboardingFlow { importedVideoID in
                     completeOnboarding(importedVideoID: importedVideoID)
                 }
-                .transition(.opacity)
+                .transition(.identity)
             } else {
                 content()
                     .overlay(alignment: .top) {
                         if showLibraryReadyToast {
                             LibraryReadyToast()
                                 .padding(.top, Spacing.xl2)
-                                .transition(.move(edge: .top).combined(with: .opacity))
+                                .transition(
+                                    reduceMotion
+                                        ? .opacity
+                                        : .move(edge: .top).combined(with: .opacity)
+                                )
                         }
                     }
             }
@@ -44,21 +49,20 @@ struct OnboardingGateView<Content: View>: View {
     }
 
     private func completeOnboarding(importedVideoID: UUID?) {
+        // Establish the destination and its result before mounting RootView so
+        // onboarding never flashes the default Feed state on the way to Library.
+        router.showLibraryAfterOnboarding(importedVideoID: importedVideoID)
         OnboardingPreferences().markCompleted()
         hasCompletedOnboarding = true
         onboardingSessionStarted = false
-        router.selectedTab = .feed
-        if let importedVideoID {
-            router.pendingFeedSelection = FeedSelection(videoID: importedVideoID, moveID: nil)
-        }
 
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+        withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .smooth(duration: 0.28)) {
             showLibraryReadyToast = true
         }
         Task {
             try? await Task.sleep(nanoseconds: 2_600_000_000)
             await MainActor.run {
-                withAnimation(.easeInOut(duration: 0.22)) {
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
                     showLibraryReadyToast = false
                 }
             }

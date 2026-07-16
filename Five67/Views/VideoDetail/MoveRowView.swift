@@ -8,9 +8,45 @@ struct MoveRowView: View {
     let onDelete: () -> Void
     let onRename: (String) -> Void
     let onExclude: () -> Void
+    let accentColor: Color
+    let activeForegroundColor: Color?
+    let showsInlineRename: Bool
 
     @State private var showRename = false
     @State private var thumbnail: UIImage?
+
+    init(
+        move: Move,
+        isActive: Bool,
+        onTap: @escaping () -> Void,
+        onDelete: @escaping () -> Void,
+        onRename: @escaping (String) -> Void,
+        onExclude: @escaping () -> Void,
+        accentColor: Color = Color.accentColor,
+        activeForegroundColor: Color? = nil,
+        showsInlineRename: Bool = true
+    ) {
+        self.move = move
+        self.isActive = isActive
+        self.onTap = onTap
+        self.onDelete = onDelete
+        self.onRename = onRename
+        self.onExclude = onExclude
+        self.accentColor = accentColor
+        self.activeForegroundColor = activeForegroundColor
+        self.showsInlineRename = showsInlineRename
+    }
+
+    private var primaryForeground: Color {
+        if move.isExcluded { return Color.secondary }
+        if isActive, let activeForegroundColor { return activeForegroundColor }
+        return Color.primary
+    }
+
+    private var secondaryForeground: Color {
+        if isActive, let activeForegroundColor { return activeForegroundColor.opacity(0.58) }
+        return Color.secondary
+    }
 
     private var displayName: String {
         move.name.isEmpty ? "Unnamed segment" : move.name
@@ -34,17 +70,17 @@ struct MoveRowView: View {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text(displayName)
                         .font(.body)
-                        .foregroundStyle(move.isExcluded ? .tertiary : .primary)
+                        .foregroundStyle(primaryForeground)
                         .lineLimit(1)
 
                     Text(move.durationLabel)
                         .font(.caption.monospacedDigit())
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(secondaryForeground)
                 }
 
                 Spacer(minLength: Spacing.sm)
 
-                if showAddName {
+                if showAddName && showsInlineRename {
                     Button {
                         showRename = true
                     } label: {
@@ -53,24 +89,39 @@ struct MoveRowView: View {
                         // (now adaptive) dark move list.
                         Text("Add name")
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(isActive && activeForegroundColor != nil ? primaryForeground : accentColor)
                             .padding(.horizontal, Spacing.md)
                             .padding(.vertical, Spacing.xs)
                             .background(Capsule().fill(Theme.secondaryChipFill))
                     }
                     .buttonStyle(.plain)
                 }
+
+                if isActive {
+                    Image(systemName: "waveform")
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(accentColor)
+                        .frame(minWidth: Spacing.touchTarget, minHeight: Spacing.touchTarget)
+                        .accessibilityHidden(true)
+                }
             }
             .padding(.trailing, Spacing.lg)
             .frame(minHeight: Spacing.rowMinHeight + Spacing.smPlus)
-            .background(
-                isActive && !move.isExcluded
-                    ? Theme.rowActiveBackground
-                    : Color.clear
-            )
+            .background(Theme.stageSurface)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(displayName), \(move.durationLabel)")
+        .accessibilityValue(isActive ? "Playing" : "")
+        .accessibilityAction(named: "Rename") {
+            showRename = true
+        }
+        .accessibilityAction(named: move.isExcluded ? "Include" : "Exclude") {
+            onExclude()
+        }
+        .accessibilityAction(named: "Delete") {
+            onDelete()
+        }
         .opacity(move.isExcluded ? 0.5 : 1)
         .task(id: thumbnailTaskID) { await loadThumbnail() }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {

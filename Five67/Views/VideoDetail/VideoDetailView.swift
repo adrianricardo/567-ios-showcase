@@ -24,6 +24,7 @@ struct VideoDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(AppRouter.self) private var router
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
 
     @Query(sort: \Style.createdAt, order: .forward) private var allStyles: [Style]
 
@@ -47,12 +48,17 @@ struct VideoDetailView: View {
         self._sortedMoves = State(wrappedValue: video.movesSorted)
     }
 
-    private var activeMove: Move? {
-        guard let id = activeMoveID else { return nil }
-        return sortedMoves.first { $0.id == id }
+    private var hasMoves: Bool { !sortedMoves.isEmpty }
+
+    private var styleAccent: Color {
+        guard let style = video.style else { return Theme.stagePrimary }
+        return StyleAccentPalette.accent(forName: style.name, id: style.id)?.color
+            ?? Theme.stagePrimary
     }
 
-    private var hasMoves: Bool { !sortedMoves.isEmpty }
+    private var stageStroke: Color {
+        colorSchemeContrast == .increased ? Theme.stageSecondary.opacity(0.6) : Theme.stageStroke
+    }
 
     var body: some View {
         contentList
@@ -106,6 +112,7 @@ struct VideoDetailView: View {
                 }
                 Button("Cancel", role: .cancel) {}
             }
+            .preferredColorScheme(.dark)
     }
 
     // MARK: - Sections
@@ -118,7 +125,9 @@ struct VideoDetailView: View {
                 video: video,
                 moves: sortedMoves,
                 allowsMarkerEditing: true,
-                showsPlaceholderWhenEmpty: true
+                accentColor: styleAccent,
+                showsPlaceholderWhenEmpty: true,
+                focusesPlaybackOnAppear: true
             ) {
                 VStack(spacing: Spacing.mdPlus) {
                     videoMenu
@@ -201,6 +210,7 @@ struct VideoDetailView: View {
             RailIcon(systemName: "ellipsis")
         }
         .accessibilityLabel("More")
+        .frame(minWidth: Spacing.touchTarget, minHeight: Spacing.touchTarget)
     }
 
     /// Picker is bound to the *id* rather than the `Style` itself so SwiftUI
@@ -226,17 +236,34 @@ struct VideoDetailView: View {
                         onTap: { activateMove(move) },
                         onDelete: { deleteMove(move) },
                         onRename: { newName in renameMove(move, to: newName) },
-                        onExclude: { toggleExclude(move) }
+                        onExclude: { toggleExclude(move) },
+                        accentColor: styleAccent,
+                        activeForegroundColor: Theme.stagePrimary,
+                        showsInlineRename: false
                     )
                     .id(move.id)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(stageStroke, lineWidth: 1)
+                    }
                     .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets())
+                    .listRowInsets(
+                        EdgeInsets(
+                            top: Spacing.xs,
+                            leading: Spacing.lg,
+                            bottom: Spacing.xs,
+                            trailing: Spacing.lg
+                        )
+                    )
                     .listRowBackground(Color.clear)
                 }
             }
             .listStyle(.plain)
-            // Move list is NOT over video — it's system-adaptive chrome.
-            .background(Color(.systemBackground))
+            .listSectionSpacing(Spacing.sm)
+            .scrollIndicators(.hidden)
+            .scrollContentBackground(.hidden)
+            .background(Theme.stageBackground)
         } else {
             emptyMovesHint
         }
@@ -275,7 +302,7 @@ struct VideoDetailView: View {
                 Text("to add your first move")
             }
             .font(.headline.weight(.semibold))
-            .foregroundStyle(Color.secondary)
+            .foregroundStyle(Theme.stageSecondary)
             .multilineTextAlignment(.center)
             .padding(.horizontal, Spacing.xl2)
             Spacer(minLength: 0)
@@ -286,15 +313,15 @@ struct VideoDetailView: View {
         // the centering by reserving that area at the bottom so the hint
         // sits in the middle of the *visible* region, not the full frame.
         .padding(.bottom, Spacing.bottomBarTopOffset)
-        // Empty-state hint is NOT over video — system-adaptive chrome.
-        .background(Color(.systemBackground))
+        .foregroundStyle(Theme.stageSecondary)
+        .background(Theme.stageBackground)
     }
 
     // MARK: - Actions
 
     private func split() {
         let t = controller.currentTime
-        let dur = controller.duration
+        let dur = effectiveDuration
         guard dur > 0, t > 0.1, t < dur - 0.1 else { return }
 
         let sorted = video.movesSorted
@@ -334,7 +361,11 @@ struct VideoDetailView: View {
 
     private func finishEditing() {
         controller.pause()
-        Haptics.success()
+        if lastMarkedTime == nil {
+            Haptics.light()
+        } else {
+            Haptics.success()
+        }
         router.selectedTab = .feed
         // Report the most recently marked move's start time (if any) so a
         // feed presenter can re-open on that move's first frame.

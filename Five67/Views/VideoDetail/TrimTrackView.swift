@@ -6,6 +6,7 @@ struct TrimTrackView: View {
     let videoURL: URL
     let moves: [Move]
     let allowsMarkerEditing: Bool
+    var accentColor: Color = Color.accentColor
     var fillsVisibleRange = false
     var showsPlaceholderWhenEmpty = false
     var onTapSegment: ((Move, TimeInterval) -> Void)? = nil
@@ -16,6 +17,9 @@ struct TrimTrackView: View {
     @State private var hasMoved = false
     @State private var pressLocationX: CGFloat = 0
     @State private var wasAtClamp = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
 
     private enum DragTarget {
         case scrub
@@ -53,11 +57,13 @@ struct TrimTrackView: View {
 
     private var trackFill: Color { Color(.systemGray5) }
     private var excludedFill: Color { Color(.systemGray4) }
-    private var playedFill: Color { Color(red: 0.42, green: 0.72, blue: 1.0) }
+    private var playedFill: Color { accentColor }
     private var handleFill: Color { Color(.systemGray3) }
     private var handleScrim: Color { Color.black.opacity(0.08) }
 
-    private var railStroke: Color { Color.black.opacity(0) }
+    private var railStroke: Color {
+        colorSchemeContrast == .increased ? Theme.stageSecondary.opacity(0.65) : Color.clear
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -89,6 +95,21 @@ struct TrimTrackView: View {
         )
         .contentShape(Rectangle())
         .gesture(dragGesture)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Playback position")
+        .accessibilityValue("\(formatTime(controller.currentTime)) of \(formatTime(dur))")
+        .accessibilityHint("Swipe up or down to seek")
+        .accessibilityAdjustableAction { direction in
+            let increment = max(1, min(5, dur / 20))
+            switch direction {
+            case .increment:
+                controller.seek(to: min(dur, controller.currentTime + increment))
+            case .decrement:
+                controller.seek(to: max(0, controller.currentTime - increment))
+            @unknown default:
+                break
+            }
+        }
     }
 
     private var placeholderPill: some View {
@@ -148,7 +169,10 @@ struct TrimTrackView: View {
             .frame(width: w, height: h)
             .offset(x: x - w / 2, y: y)
             .shadow(color: active ? Color.black.opacity(0.18) : handleScrim, radius: active ? 5 : 1, y: 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.75), value: active)
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.75),
+                value: active
+            )
             .allowsHitTesting(false)
     }
 

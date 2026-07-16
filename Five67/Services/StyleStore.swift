@@ -37,6 +37,13 @@ import SwiftData
     /// Chip label: the active style's name, or "All" when unfiltered.
     var label: String { activeStyle?.name ?? "All" }
 
+    /// Approved signal color for the active style. `nil` keeps All mode
+    /// visually neutral.
+    var accent: StyleAccent? {
+        guard let activeStyle else { return nil }
+        return StyleAccentPalette.accent(forName: activeStyle.name, id: activeStyle.id)
+    }
+
     /// True when the video belongs in the current mode. Untagged videos only
     /// appear in "All".
     func matches(_ video: Video) -> Bool {

@@ -25,7 +25,7 @@ struct RailIcon: View {
         Image(systemName: systemName)
             .font(.system(size: 18, weight: .semibold))
             .foregroundStyle(active ? Color.black.opacity(0.85) : Color.white.opacity(0.95))
-            .frame(width: Spacing.xl5, height: Spacing.xl5)
+            .frame(width: Spacing.touchTarget, height: Spacing.touchTarget)
             .liquidGlass(
                 in: Circle(),
                 tint: active ? Color.white.opacity(0.85) : nil,

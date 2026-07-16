@@ -8,6 +8,7 @@ struct OnboardingFlow: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.modelContext) private var modelContext
+    @Environment(StyleStore.self) private var styleStore
     @Environment(UnlockStore.self) private var unlockStore
     @Query(sort: \Video.importedAt, order: .reverse) private var allVideos: [Video]
 
@@ -21,6 +22,7 @@ struct OnboardingFlow: View {
     @State private var importError: String?
     @State private var photosStatus: PHAuthorizationStatus?
     @State private var importedVideo: Video?
+    @State private var navigationDirection: NavigationDirection = .forward
 
     private let preferences = OnboardingPreferences()
 
@@ -34,7 +36,18 @@ struct OnboardingFlow: View {
                 }
             }
         }
-        .background(Color(.systemBackground).ignoresSafeArea())
+        .safeAreaInset(edge: .bottom, spacing: Spacing.none) {
+            if beat == .styles {
+                styleContinueBar
+                    .transition(
+                        reduceMotion
+                            ? .opacity
+                            : .move(edge: .bottom).combined(with: .opacity)
+                    )
+            }
+        }
+        .background(onboardingBackground.ignoresSafeArea())
+        .preferredColorScheme(beat == .styles ? .dark : nil)
         .photosPicker(
             isPresented: $showSeedPicker,
             selection: $pickerItems,
@@ -57,11 +70,38 @@ struct OnboardingFlow: View {
             Text(importError ?? "An unknown error occurred.")
         }
         .onAppear {
+            if ProcessInfo.processInfo.arguments.contains("-Five67UITestOnboardingCompletionFixture") {
+                beat = .paywall
+            }
             selectedValueProps = preferences.savedValueProps()
-            selectedStyles = preferences.savedDanceStyles()
+            let savedStyles = preferences.savedDanceStyles()
+            selectedStyles = styleOptions.first(where: savedStyles.contains).map { [$0] } ?? []
             selectedVolume = preferences.savedVideoVolume()
             Style.seedDefaultsIfNeeded(in: modelContext)
         }
+    }
+
+    private var onboardingBackground: Color {
+        beat == .styles ? Theme.stageBackground : Color(.systemBackground)
+    }
+
+    private var selectedStyleName: String? {
+        styleOptions.first(where: selectedStyles.contains)
+    }
+
+    private var onboardingAccent: Color {
+        beat == .styles ? Theme.stagePrimary : Color.accentColor
+    }
+
+    private var beatTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+
+        let insertionEdge: Edge = navigationDirection == .forward ? .trailing : .leading
+        let removalEdge: Edge = navigationDirection == .forward ? .leading : .trailing
+        return .asymmetric(
+            insertion: .move(edge: insertionEdge).combined(with: .opacity),
+            removal: .move(edge: removalEdge).combined(with: .opacity)
+        )
     }
 
     @ViewBuilder
@@ -98,6 +138,8 @@ struct OnboardingFlow: View {
             ScrollView {
                 VStack(spacing: Spacing.xl4) {
                     content()
+                        .id(beat)
+                        .transition(beatTransition)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, Spacing.xl)
@@ -126,12 +168,13 @@ struct OnboardingFlow: View {
                 Spacer()
             }
 
-            OnboardingProgressDots(currentIndex: beat.progressIndex)
+            OnboardingProgressDots(currentIndex: beat.progressIndex, accent: onboardingAccent)
         }
         .padding(.horizontal, Spacing.md)
         .padding(.top, Spacing.sm)
         .padding(.bottom, Spacing.md)
-        .background(Color(.systemBackground).opacity(0.96))
+        .foregroundStyle(beat == .styles ? Theme.stagePrimary : Color.primary)
+        .background(onboardingBackground.opacity(0.96))
     }
 
     private var canGoBack: Bool {
@@ -178,19 +221,56 @@ struct OnboardingFlow: View {
     }
 
     private var stylesBeat: some View {
-        optionBeat(
-            title: "What do you dance?",
-            subtitle: "So your library speaks your styles.",
-            options: styleOptions,
-            selected: selectedStyles,
-            allowsMultiple: true,
-            continueTitle: "Continue",
-            toggle: toggleStyle,
-            continueAction: {
-                preferences.saveDanceStyles(selectedStyles)
-                goNext()
+        VStack(alignment: .leading, spacing: Spacing.xl3) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                Text("What do you dance most?")
+                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    .tracking(-0.8)
+                    .foregroundStyle(Theme.stagePrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("Choose where you want your library to start. You can change this later.")
+                    .font(.body)
+                    .foregroundStyle(Theme.stageSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-        )
+
+            VStack(spacing: Spacing.smPlus) {
+                ForEach(styleOptions, id: \.self) { style in
+                    StageStyleRow(
+                        title: style == "Other" ? "Something else" : style,
+                        accent: StyleAccentPalette.accent(forName: style)?.color,
+                        isSelected: selectedStyles.contains(style)
+                    ) {
+                        toggleStyle(style)
+                    }
+                }
+            }
+        }
+    }
+
+    private var styleContinueBar: some View {
+        VStack(spacing: Spacing.none) {
+            Button {
+                preferences.saveDanceStyles(selectedStyles)
+                activateSelectedStyle()
+                goNext()
+            } label: {
+                HStack(spacing: Spacing.md) {
+                    Text("Continue")
+
+                    Spacer()
+
+                    Image(systemName: "arrow.right")
+                        .font(.headline.weight(.black))
+                }
+            }
+            .buttonStyle(StagePrimaryActionButtonStyle())
+            .accessibilityHint("Continues to the next onboarding step")
+            .padding(.horizontal, Spacing.xl)
+            .padding(.vertical, Spacing.md)
+        }
+        .background(Theme.stageBackground.opacity(0.96))
     }
 
     private var volumeBeat: some View {
@@ -388,7 +468,7 @@ struct OnboardingFlow: View {
                 }
             )
 
-            OnboardingProgressDots(currentIndex: beat.progressIndex)
+            OnboardingProgressDots(currentIndex: beat.progressIndex, accent: onboardingAccent)
                 .padding(.horizontal, Spacing.lg)
                 .padding(.vertical, Spacing.sm)
                 .liquidGlass(in: Capsule())
@@ -460,22 +540,33 @@ struct OnboardingFlow: View {
 
     private func goNext() {
         if let next = Beat(rawValue: beat.rawValue + 1) {
-            beat = next
+            navigationDirection = .forward
+            withAnimation(beatAnimation) {
+                beat = next
+            }
         }
         Haptics.light()
     }
 
     private func goBack() {
         if let previous = Beat(rawValue: beat.rawValue - 1) {
-            beat = previous
+            navigationDirection = .backward
+            withAnimation(beatAnimation) {
+                beat = previous
+            }
         }
         Haptics.light()
+    }
+
+    private var beatAnimation: Animation {
+        reduceMotion ? .easeOut(duration: 0.12) : .smooth(duration: 0.32)
     }
 
     private func complete() {
         preferences.saveValueProps(selectedValueProps)
         preferences.saveDanceStyles(selectedStyles)
         preferences.saveVideoVolume(selectedVolume)
+        activateSelectedStyle()
         preferences.markCompleted()
         onComplete(importedVideo?.id)
     }
@@ -492,12 +583,39 @@ struct OnboardingFlow: View {
 
     private func toggleStyle(_ value: String) {
         if selectedStyles.contains(value) {
-            selectedStyles.remove(value)
+            selectedStyles.removeAll()
         } else {
-            selectedStyles.insert(value)
+            selectedStyles = [value]
         }
         preferences.saveDanceStyles(selectedStyles)
         Haptics.select()
+    }
+
+    /// Resolves the onboarding choice into the same persisted Style model used
+    /// by the global app filter. Non-seeded options become ordinary user
+    /// styles; choosing "Something else" leaves the app in neutral All mode.
+    @discardableResult
+    private func activateSelectedStyle() -> Style? {
+        guard let selectedStyleName, selectedStyleName != "Other" else {
+            styleStore.activeStyle = nil
+            return nil
+        }
+
+        let descriptor = FetchDescriptor<Style>()
+        let styles = (try? modelContext.fetch(descriptor)) ?? []
+        let style: Style
+        if let existing = styles.first(where: {
+            $0.name.localizedCaseInsensitiveCompare(selectedStyleName) == .orderedSame
+        }) {
+            style = existing
+        } else {
+            style = Style(name: selectedStyleName)
+            modelContext.insert(style)
+        }
+
+        styleStore.activeStyle = style
+        try? modelContext.save()
+        return style
     }
 
     private func requestPhotoAccess() async {
@@ -519,6 +637,7 @@ struct OnboardingFlow: View {
         do {
             let result = try await VideoImporter.import(from: item, existingSourceIDs: existingSourceIDs)
             let video = VideoImportPersistence.insertVideo(from: result, in: modelContext)
+            video.style = styleStore.activeStyle
             try? modelContext.save()
             importedVideo = video
             Haptics.success()
@@ -576,14 +695,20 @@ private enum Beat: Int, CaseIterable {
     var progressIndex: Int { rawValue }
 }
 
+private enum NavigationDirection {
+    case forward
+    case backward
+}
+
 private struct OnboardingProgressDots: View {
     let currentIndex: Int
+    let accent: Color
 
     var body: some View {
         HStack(spacing: Spacing.xs) {
             ForEach(0..<Beat.allCases.count, id: \.self) { index in
                 Capsule()
-                    .fill(index <= currentIndex ? Color.accentColor : Color.secondary.opacity(0.25))
+                    .fill(index <= currentIndex ? accent : Color.secondary.opacity(0.25))
                     .frame(width: index == currentIndex ? 18 : 6, height: 6)
             }
         }
@@ -632,6 +757,50 @@ private struct OptionRow: View {
 
     private var unselectedIcon: String {
         allowsMultiple ? "square" : "circle"
+    }
+}
+
+private struct StageStyleRow: View {
+    let title: String
+    let accent: Color?
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Spacing.md) {
+                Circle()
+                    .fill(accent ?? Theme.stageSecondary)
+                    .frame(width: 12, height: 12)
+                    .accessibilityHidden(true)
+
+                Text(title)
+                    .font(.body.weight(.bold))
+                    .foregroundStyle(Theme.stagePrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .multilineTextAlignment(.leading)
+
+                StageSelectionCheckmark(
+                    isSelected: isSelected,
+                    accent: accent ?? Theme.stagePrimary
+                )
+            }
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.md)
+            .frame(maxWidth: .infinity, minHeight: 64)
+            .background(
+                Theme.stageSurface,
+                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Theme.stageStroke, lineWidth: 1)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .buttonStyle(StageSelectableRowButtonStyle())
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
