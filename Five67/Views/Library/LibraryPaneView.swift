@@ -620,11 +620,14 @@ extension View {
                         .padding(Spacing.xl2)
                         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
                         .padding(Spacing.xl5)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Preparing export")
+                        .accessibilityValue("This may take a moment for large libraries")
                     }
+                    .accessibilityAddTraits(.isModal)
                     .transition(.opacity)
                 }
             }
-            .animation(.easeInOut(duration: 0.15), value: isExporting.wrappedValue)
     }
 }
 

@@ -14,7 +14,7 @@ struct VideoRowView: View {
                     .lineLimit(1)
                 Text(subtitleText)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.stageSecondary)
             }
             Spacer(minLength: 0)
         }
@@ -30,12 +30,13 @@ struct VideoRowView: View {
                     .aspectRatio(contentMode: .fill)
             } else {
                 Rectangle()
-                    .fill(Color(.systemGray5))
-                    .overlay(Image(systemName: "film").foregroundStyle(.secondary))
+                    .fill(Theme.stageRaisedSurface)
+                    .overlay(Image(systemName: "film").foregroundStyle(Theme.stageSecondary))
             }
         }
         .frame(width: 64, height: 44)
         .clipShape(RoundedRectangle(cornerRadius: 6))
+        .accessibilityHidden(true)
     }
 
     private var subtitleText: String {

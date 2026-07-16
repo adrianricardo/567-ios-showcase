@@ -200,3 +200,80 @@ struct StageSelectableRowButtonStyle: ButtonStyle {
             )
     }
 }
+
+/// Canonical selectable-row treatment for authored Warm Stage surfaces.
+/// The optional dot is identity metadata; the trailing checkmark is the only
+/// visible cue that changes with selection.
+struct StageSelectableRow: View {
+    let title: String
+    var accessibilityTitle: String? = nil
+    var identityColor: Color? = nil
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Spacing.md) {
+                if let identityColor {
+                    Circle()
+                        .fill(identityColor)
+                        .frame(width: 12, height: 12)
+                        .accessibilityHidden(true)
+                }
+
+                Text(title)
+                    .font(.body.weight(.bold))
+                    .foregroundStyle(Theme.stagePrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .multilineTextAlignment(.leading)
+
+                StageSelectionCheckmark(
+                    isSelected: isSelected,
+                    accent: identityColor ?? Theme.stagePrimary
+                )
+            }
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.md)
+            .frame(maxWidth: .infinity, minHeight: 60)
+            .background(
+                Theme.stageSurface,
+                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Theme.stageStroke, lineWidth: 1)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(StageSelectableRowButtonStyle())
+        .accessibilityLabel(accessibilityTitle ?? title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+struct StageSecondaryActionButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline.weight(.bold))
+            .foregroundStyle(isEnabled ? Theme.stagePrimary : Theme.stageSecondary)
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.lg)
+            .frame(maxWidth: .infinity, minHeight: 56)
+            .background(
+                Theme.stageSurface,
+                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Theme.stageStroke, lineWidth: 1)
+            }
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.985 : 1)
+            .animation(
+                reduceMotion ? nil : .smooth(duration: 0.14),
+                value: configuration.isPressed
+            )
+    }
+}

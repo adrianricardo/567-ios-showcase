@@ -326,7 +326,7 @@ struct VideoFeedView: View {
                     .foregroundStyle(.black)
                     .frame(maxWidth: .infinity)
                     .frame(height: Spacing.primaryButtonHeight)
-                    .background(.white, in: Capsule())
+                    .background(.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
             .padding(.top, Spacing.xs)
         }
@@ -392,6 +392,11 @@ struct VideoFeedView: View {
 
             if isActive {
                 playbackOverlay
+                if let controller = controllers[video.id],
+                   let message = controller.playbackErrorMessage {
+                    PlaybackFailureView(message: message, retry: controller.retry)
+                        .padding(.horizontal, Spacing.xl3)
+                }
             }
 
             if shouldShowNoMovesCTA(for: video) {
@@ -569,16 +574,10 @@ struct VideoFeedView: View {
         VStack(spacing: Spacing.xl3) {
             Spacer(minLength: Spacing.xl4)
 
-            ZStack {
-                Circle()
-                    .fill(.cyan.opacity(0.18))
-                    .frame(width: 170, height: 170)
-                    .blur(radius: Spacing.lgPlus)
-                Image(systemName: "play.rectangle.on.rectangle.fill")
-                    .font(.system(size: 70, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .symbolEffect(.pulse, options: .repeating)
-            }
+            Image(systemName: "play.rectangle.on.rectangle.fill")
+                .font(.system(size: 70, weight: .semibold))
+                .foregroundStyle(.white)
+                .accessibilityHidden(true)
 
             VStack(spacing: Spacing.smPlus) {
                 Text("Drop in a dance video")
@@ -601,7 +600,7 @@ struct VideoFeedView: View {
                         .foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                         .frame(height: Spacing.rowMinHeight)
-                        .background(.white, in: Capsule())
+                        .background(.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
                 Button {
                     showFilesImporter = true
@@ -611,18 +610,18 @@ struct VideoFeedView: View {
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 54)
-                        .background(.white.opacity(0.12), in: Capsule())
-                        .overlay(Capsule().stroke(.white.opacity(0.14)))
+                        .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(.white.opacity(0.14))
+                        }
                 }
             }
             .padding(.horizontal, Spacing.xl3)
 
             Spacer(minLength: Spacing.xl)
         }
-        .background(
-            RadialGradient(colors: [.cyan.opacity(0.24), .purple.opacity(0.13), .black], center: .top, startRadius: 20, endRadius: 620)
-                .ignoresSafeArea()
-        )
+        .background(Color.black.ignoresSafeArea())
     }
 
     // MARK: - Coach beats

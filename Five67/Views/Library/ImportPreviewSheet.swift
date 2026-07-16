@@ -5,6 +5,7 @@ struct ImportPreviewSheet: View {
     let duplicateCount: Int
     let onContinue: () -> Void
     let onCancel: () -> Void
+    @AccessibilityFocusState private var focusHeadline: Bool
 
     var body: some View {
         NavigationStack {
@@ -14,16 +15,19 @@ struct ImportPreviewSheet: View {
                 VStack(spacing: Spacing.lg) {
                     Image(systemName: "square.and.arrow.down.on.square")
                         .font(.system(size: 56, weight: .light))
-                        .foregroundStyle(.tint)
+                        .foregroundStyle(Theme.stageSecondary)
+                        .accessibilityHidden(true)
 
                     VStack(spacing: Spacing.sm) {
                         Text(headline)
                             .font(.title2.weight(.semibold))
                             .multilineTextAlignment(.center)
+                            .accessibilityAddTraits(.isHeader)
+                            .accessibilityFocused($focusHeadline)
                         if duplicateCount > 0 {
                             Text(duplicateLine)
                                 .font(.body)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Theme.stageSecondary)
                                 .multilineTextAlignment(.center)
                         }
                     }
@@ -34,12 +38,8 @@ struct ImportPreviewSheet: View {
 
                 Button(action: onContinue) {
                     Text(newCount == 0 ? "Done" : "Continue")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: Spacing.primaryButtonHeight)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                .buttonStyle(StagePrimaryActionButtonStyle())
                 .padding(.horizontal, Spacing.xl)
                 .padding(.bottom, Spacing.md)
             }
@@ -48,6 +48,14 @@ struct ImportPreviewSheet: View {
                     Button("Cancel", action: onCancel)
                 }
             }
+            .foregroundStyle(Theme.stagePrimary)
+            .background(Theme.stageBackground)
+            .toolbarBackground(Theme.stageBackground, for: .navigationBar)
+        }
+        .preferredColorScheme(.dark)
+        .task {
+            await Task.yield()
+            focusHeadline = true
         }
     }
 

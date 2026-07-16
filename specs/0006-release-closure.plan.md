@@ -626,8 +626,8 @@ If App Store Connect or signing access is unavailable, do not claim release. Mar
 
 | ID | Status | Owner/session | Last update | Notes |
 |---|---|---|---|---|
-| P0 | in-progress | Codex implementation session | 2026-07-16 | Initial dirty baseline inventoried and fully reviewed; G1 baseline-commit authorization recorded from Adrian's implementation prompt |
-| P1 | pending | - | - | App-wide design-system audit and polish |
+| P0 | done | Codex implementation session | 2026-07-16 | Green build/tests/diff check; plan commit `9792afc`; exact Groups 0–5 baseline commit `2bad989` |
+| P1 | done | Codex implementation session | 2026-07-16 | Complete coverage matrix, Warm Stage implementation, accessibility/visual evidence, build/test/fresh-launch verification; atomic commit pending below |
 | P2 | pending | - | - | Entitlement-backed paywall; Gate G2 required |
 | P3 | pending | - | - | Integrated release-candidate QA |
 | P4 | pending | - | - | TestFlight/App Review; Gates G4–G5 required |
@@ -636,11 +636,24 @@ Status values: `pending`, `in-progress`, `blocked`, `done`.
 
 ## Handoff
 
-Current state: P0 verification is complete and its G1-authorized atomic commits are next. The implementation session began from the exact intentional Groups 0–5 dirty baseline recorded in `Current state snapshot`; all tracked diffs and untracked design artifacts were reviewed, and the 16 source/test files remained byte-for-byte identical to their recorded SHA-256 baseline through verification.
+Current state: P0 is complete at clean commit `2bad989`; P1 implementation and verification are complete and ready for the required atomic commit. The implementation session began from the exact intentional Groups 0–5 dirty baseline recorded in `Current state snapshot`; all tracked diffs and untracked design artifacts were reviewed, and the 16 source/test files remained byte-for-byte identical to their recorded SHA-256 baseline through the P0 verification and commit boundary.
 
-Next step: Create the explicit release-plan and Warm Stage baseline commits, record their SHAs, and begin P1 only after P0 leaves no unexplained modifications.
+Next step: create the P1 atomic commit, record its SHA here, then stop. P2 must not begin until Adrian authorizes G2. P3 must not begin until Adrian reviews the P1 coverage matrix/screenshots and satisfies G3.
 
-Files changed in this implementation session: `specs/0006-release-closure.plan.md` (Progress/Handoff bookkeeping only so far). The pre-existing Groups 0–5 files remain byte-for-byte unchanged at this checkpoint.
+Files changed in P0: the existing Groups 0–5 source/test/design baseline was committed exactly as reviewed; stale migration-status wording was reconciled in `docs/design-migration.md`, `docs/README.md`, and `docs/design-foundation-brief.md`; this plan records progress and evidence.
+
+Files changed in P1: `docs/design-system-coverage.md` classifies every reachable surface; `Theme.swift` centralizes the Warm Stage selectable-row and secondary-action recipes; onboarding and splash now use the Warm Stage throughout, checked-in 567 artwork, the exact approved two-card pain beat, non-placeholder payoff art, and Reduce Motion/accessibility semantics; Styles and import preview use the shared stage recipe; Feed removes the decorative gradient/glow and adds playback recovery; shared status, export-progress, and video-row semantics are no longer color-only or forced-motion; deterministic UI review fixtures and two focused P1 UI journeys cover the final treatments.
+
+P1 checks run (2026-07-16):
+
+- `make build` — passed; `build/logs/build.pretty.log` ends in `Build Succeeded`.
+- Focused onboarding UI journey — passed after correcting the approved pain beat and making the review fixture reset persisted survey answers; 1 test, zero failures.
+- `make test` — passed; all Swift Testing suites and all 15 `TabBarVerifyTests` UI tests completed with zero failures. The accepted V3→V4 migration known-issue `duplicate ZSTYLE` diagnostics remain unchanged and outside P1.
+- `make run-fresh` — passed; uninstalled the app/data, rebuilt, installed, and launched the clean-install Warm Stage onboarding.
+- `git diff --check` — passed with no output.
+- Simulator accessibility/visual exercise — default and accessibility XXXL Dynamic Type, Reduce Motion, Increase Contrast, selected traits/named actions/focus discovery in UI tests, 44-point minimum actions, and color/grayscale screenshot inspection all passed.
+
+P1 evidence is stored in ignored `build/release-evidence/design/`: final clean hook, pain, payoff, unavailable-product paywall shell, populated Library, Feed, Styles, add-video dialog, accessibility XXXL, Reduce Motion, Increase Contrast, and grayscale captures. Native Photos/StoreKit transactions, migration failure, playback failure, export progress, and the preview-only import summary were not artificially forced; `docs/design-system-coverage.md` records the exact code-review/runtime boundary. StoreKit behavior remains P2-owned behind G2.
 
 Checks run (2026-07-16):
 
@@ -649,6 +662,13 @@ Checks run (2026-07-16):
 - `git diff --check` — passed with no output.
 - Obsolete-symbol/fixture search — no matches in `Five67`, `Five67Tests`, or `Five67UITests`. Historical migration docs intentionally retain former token/group names. The UI suite asserts that “Practice this loop” is absent and Loop remains the only looping control.
 - Post-verification SHA-256 comparison — all 16 pre-existing source/test files match the pre-edit inventory exactly.
+
+P0 commits:
+
+- `9792afc` — `Agent Codex: add v1.1 release closure plan`
+- `2bad989` — `Agent Codex: complete Warm Stage migration`
+
+P0 boundary status: `git status --short` produced no output immediately after `2bad989`; there were no unexplained pre-P1 modifications.
 
 Initial `git status --short` (2026-07-16, before implementation edits):
 

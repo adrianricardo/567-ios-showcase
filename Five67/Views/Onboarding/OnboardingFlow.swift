@@ -14,6 +14,7 @@ struct OnboardingFlow: View {
 
     @State private var beat: Beat = .hook
     @State private var selectedValueProps: Set<String> = []
+    @State private var painCardIndex = 0
     @State private var selectedStyles: Set<String> = []
     @State private var selectedVolume: String?
     @State private var showSeedPicker = false
@@ -47,7 +48,8 @@ struct OnboardingFlow: View {
             }
         }
         .background(onboardingBackground.ignoresSafeArea())
-        .preferredColorScheme(beat == .styles ? .dark : nil)
+        .foregroundStyle(Theme.stagePrimary)
+        .preferredColorScheme(.dark)
         .photosPicker(
             isPresented: $showSeedPicker,
             selection: $pickerItems,
@@ -82,7 +84,7 @@ struct OnboardingFlow: View {
     }
 
     private var onboardingBackground: Color {
-        beat == .styles ? Theme.stageBackground : Color(.systemBackground)
+        Theme.stageBackground
     }
 
     private var selectedStyleName: String? {
@@ -90,7 +92,8 @@ struct OnboardingFlow: View {
     }
 
     private var onboardingAccent: Color {
-        beat == .styles ? Theme.stagePrimary : Color.accentColor
+        selectedStyleName.flatMap { StyleAccentPalette.accent(forName: $0)?.color }
+            ?? Theme.stagePrimary
     }
 
     private var beatTransition: AnyTransition {
@@ -111,6 +114,8 @@ struct OnboardingFlow: View {
             hookBeat
         case .valueSurvey:
             valueSurveyBeat
+        case .pain:
+            painBeat
         case .styles:
             stylesBeat
         case .volume:
@@ -173,7 +178,7 @@ struct OnboardingFlow: View {
         .padding(.horizontal, Spacing.md)
         .padding(.top, Spacing.sm)
         .padding(.bottom, Spacing.md)
-        .foregroundStyle(beat == .styles ? Theme.stagePrimary : Color.primary)
+        .foregroundStyle(Theme.stagePrimary)
         .background(onboardingBackground.opacity(0.96))
     }
 
@@ -183,7 +188,7 @@ struct OnboardingFlow: View {
 
     private var hookBeat: some View {
         VStack(spacing: Spacing.xl4) {
-            MockPhonePreview(reduceMotion: reduceMotion)
+            OnboardingBrandHero(reduceMotion: reduceMotion)
                 .frame(maxWidth: .infinity)
                 .frame(height: 320)
 
@@ -195,7 +200,7 @@ struct OnboardingFlow: View {
 
                 Text("Turn the dance clips buried in your camera roll into a move library you'll actually practice.")
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.stageSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -210,7 +215,6 @@ struct OnboardingFlow: View {
             subtitle: nil,
             options: valuePropOptions,
             selected: selectedValueProps,
-            allowsMultiple: true,
             continueTitle: "Continue",
             toggle: toggleValueProp,
             continueAction: {
@@ -218,6 +222,63 @@ struct OnboardingFlow: View {
                 goNext()
             }
         )
+    }
+
+    private var painBeat: some View {
+        VStack(alignment: .leading, spacing: Spacing.xl3) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                Text("Sound familiar?")
+                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    .tracking(-0.8)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("\(painCardIndex + 1) of 2")
+                    .font(.body)
+                    .foregroundStyle(Theme.stageSecondary)
+                    .accessibilityLabel("Pain card \(painCardIndex + 1) of 2")
+            }
+
+            painCard(
+                number: painCardIndex == 0 ? "01" : "02",
+                title: painCardIndex == 0
+                    ? "You record every class… and never watch them again."
+                    : "A week later the move's gone — and the video's lost in 2,000 camera-roll clips."
+            )
+            .id(painCardIndex)
+            .transition(reduceMotion ? .identity : .opacity.combined(with: .move(edge: .trailing)))
+
+            primaryButton(painCardIndex == 0 ? "Keep going" : "That's me") {
+                if painCardIndex == 0 {
+                    withAnimation(reduceMotion ? nil : .smooth(duration: 0.24)) {
+                        painCardIndex = 1
+                    }
+                } else {
+                    goNext()
+                }
+            }
+        }
+    }
+
+    private func painCard(number: String, title: String) -> some View {
+        HStack(alignment: .top, spacing: Spacing.md) {
+            Text(number)
+                .font(.caption.monospacedDigit().weight(.bold))
+                .foregroundStyle(Theme.stageSecondary)
+                .frame(width: 30, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: Spacing.xsPlus) {
+                Text(title)
+                    .font(.headline.weight(.bold))
+            }
+        }
+        .padding(Spacing.lg)
+        .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
+        .background(Theme.stageSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Theme.stageStroke, lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private var stylesBeat: some View {
@@ -237,9 +298,9 @@ struct OnboardingFlow: View {
 
             VStack(spacing: Spacing.smPlus) {
                 ForEach(styleOptions, id: \.self) { style in
-                    StageStyleRow(
+                    StageSelectableRow(
                         title: style == "Other" ? "Something else" : style,
-                        accent: StyleAccentPalette.accent(forName: style)?.color,
+                        identityColor: StyleAccentPalette.accent(forName: style)?.color,
                         isSelected: selectedStyles.contains(style)
                     ) {
                         toggleStyle(style)
@@ -279,7 +340,6 @@ struct OnboardingFlow: View {
             subtitle: nil,
             options: volumeOptions,
             selected: Set(selectedVolume.map { [$0] } ?? []),
-            allowsMultiple: false,
             continueTitle: "Continue",
             toggle: { selectedVolume = $0 },
             continueAction: {
@@ -291,7 +351,7 @@ struct OnboardingFlow: View {
 
     private var payoffBeat: some View {
         VStack(spacing: Spacing.xl4) {
-            PayoffLoopMock(reduceMotion: reduceMotion)
+            OnboardingPayoffArtwork(reduceMotion: reduceMotion)
                 .frame(height: 320)
 
             VStack(spacing: Spacing.md) {
@@ -300,7 +360,7 @@ struct OnboardingFlow: View {
                     .multilineTextAlignment(.center)
                 Text("Clipped. Named. Looping. Ready to practice in seconds.")
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.stageSecondary)
                     .multilineTextAlignment(.center)
             }
 
@@ -320,13 +380,13 @@ struct OnboardingFlow: View {
                     BulletLine("Everything stays on your device. Private by design.")
                     BulletLine("We only touch the videos you choose to save")
                 }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.stageSecondary)
                 .padding(.top, Spacing.sm)
 
                 if photosStatus == .limited {
                     Text("Limited access is okay here. You can still pick a class video manually.")
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.stageSecondary)
                         .padding(.top, Spacing.sm)
                 }
             }
@@ -341,8 +401,9 @@ struct OnboardingFlow: View {
         VStack(spacing: Spacing.xl4) {
             Image(systemName: "film.stack")
                 .font(.system(size: 72, weight: .light))
-                .foregroundStyle(.tint)
+                .foregroundStyle(onboardingAccent)
                 .frame(height: 110)
+                .accessibilityHidden(true)
 
             VStack(spacing: Spacing.md) {
                 Text("Pick a video from your recent classes.")
@@ -351,7 +412,14 @@ struct OnboardingFlow: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Text("Start with one — we'll turn it into your first moves.")
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.stageSecondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            if photosStatus == .denied || photosStatus == .restricted {
+                Text("You can still choose a video with Apple's private picker. 567 only receives the video you select.")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.stageSecondary)
                     .multilineTextAlignment(.center)
             }
 
@@ -392,7 +460,7 @@ struct OnboardingFlow: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Text("Unlock unlimited moves — no subscription, ever.")
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.stageSecondary)
                     .multilineTextAlignment(.center)
             }
 
@@ -403,19 +471,23 @@ struct OnboardingFlow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Spacing.lg)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.secondaryChipFill))
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.stageSurface))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Theme.stageStroke, lineWidth: 1)
+            }
 
             if let message = unlockStore.productLoadMessage {
                 Text(message)
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.stageSecondary)
                     .multilineTextAlignment(.center)
             }
 
             if let message = unlockStore.purchaseMessage {
                 Text(message)
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.stageSecondary)
                     .multilineTextAlignment(.center)
             }
 
@@ -439,7 +511,7 @@ struct OnboardingFlow: View {
                     }
                 }
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.stageSecondary)
                 .frame(minHeight: Spacing.touchTarget)
                 .disabled(unlockStore.isRestoring)
             }
@@ -483,7 +555,6 @@ struct OnboardingFlow: View {
         subtitle: String?,
         options: [String],
         selected: Set<String>,
-        allowsMultiple: Bool,
         continueTitle: String,
         toggle: @escaping (String) -> Void,
         continueAction: @escaping () -> Void
@@ -496,16 +567,16 @@ struct OnboardingFlow: View {
                 if let subtitle {
                     Text(subtitle)
                         .font(.body)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.stageSecondary)
                 }
             }
 
             VStack(spacing: Spacing.md) {
                 ForEach(options, id: \.self) { option in
-                    OptionRow(
+                    StageSelectableRow(
                         title: option,
+                        accessibilityTitle: accessibleOptionTitle(option),
                         isSelected: selected.contains(option),
-                        allowsMultiple: allowsMultiple
                     ) {
                         toggle(option)
                     }
@@ -519,23 +590,24 @@ struct OnboardingFlow: View {
     private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.headline.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .frame(height: Spacing.primaryButtonHeight)
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
+        .buttonStyle(StagePrimaryActionButtonStyle())
     }
 
     private func secondaryButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.headline.weight(.semibold))
-                .foregroundStyle(.primary)
-                .frame(maxWidth: .infinity)
-                .frame(height: Spacing.primaryButtonHeight)
-                .background(Theme.secondaryChipFill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
+        .buttonStyle(StageSecondaryActionButtonStyle())
+    }
+
+    private func accessibleOptionTitle(_ title: String) -> String {
+        guard let firstSpace = title.firstIndex(of: " ") else { return title }
+        let prefix = title[..<firstSpace]
+        guard prefix.unicodeScalars.contains(where: { $0.properties.isEmojiPresentation }) else {
+            return title
+        }
+        return String(title[title.index(after: firstSpace)...])
     }
 
     private func goNext() {
@@ -683,6 +755,7 @@ struct OnboardingFlow: View {
 private enum Beat: Int, CaseIterable {
     case hook
     case valueSurvey
+    case pain
     case styles
     case volume
     case payoff
@@ -708,99 +781,12 @@ private struct OnboardingProgressDots: View {
         HStack(spacing: Spacing.xs) {
             ForEach(0..<Beat.allCases.count, id: \.self) { index in
                 Capsule()
-                    .fill(index <= currentIndex ? accent : Color.secondary.opacity(0.25))
+                    .fill(index <= currentIndex ? accent : Theme.stageSecondary.opacity(0.25))
                     .frame(width: index == currentIndex ? 18 : 6, height: 6)
             }
         }
         .accessibilityLabel("Onboarding progress")
         .accessibilityValue("\(currentIndex + 1) of \(Beat.allCases.count)")
-    }
-}
-
-private struct OptionRow: View {
-    let title: String
-    let isSelected: Bool
-    let allowsMultiple: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: Spacing.md) {
-                Text(title)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .multilineTextAlignment(.leading)
-
-                Image(systemName: isSelected ? selectedIcon : unselectedIcon)
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
-                    .frame(width: 24, height: 24)
-            }
-            .padding(.horizontal, Spacing.lg)
-            .frame(minHeight: Spacing.rowMinHeight)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(isSelected ? Color.accentColor.opacity(0.16) : Theme.secondaryChipFill)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(isSelected ? Color.accentColor.opacity(0.75) : Color.clear, lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var selectedIcon: String {
-        allowsMultiple ? "checkmark.square.fill" : "largecircle.fill.circle"
-    }
-
-    private var unselectedIcon: String {
-        allowsMultiple ? "square" : "circle"
-    }
-}
-
-private struct StageStyleRow: View {
-    let title: String
-    let accent: Color?
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: Spacing.md) {
-                Circle()
-                    .fill(accent ?? Theme.stageSecondary)
-                    .frame(width: 12, height: 12)
-                    .accessibilityHidden(true)
-
-                Text(title)
-                    .font(.body.weight(.bold))
-                    .foregroundStyle(Theme.stagePrimary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .multilineTextAlignment(.leading)
-
-                StageSelectionCheckmark(
-                    isSelected: isSelected,
-                    accent: accent ?? Theme.stagePrimary
-                )
-            }
-            .padding(.horizontal, Spacing.lg)
-            .padding(.vertical, Spacing.md)
-            .frame(maxWidth: .infinity, minHeight: 64)
-            .background(
-                Theme.stageSurface,
-                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(Theme.stageStroke, lineWidth: 1)
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        }
-        .buttonStyle(StageSelectableRowButtonStyle())
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -821,119 +807,6 @@ private struct BulletLine: View {
     }
 }
 
-private struct MockPhonePreview: View {
-    let reduceMotion: Bool
-    @State private var pulse = false
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 34, style: .continuous)
-                .fill(Color.black)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 34, style: .continuous)
-                        .stroke(.white.opacity(0.16), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.32), radius: 20, y: 12)
-
-            VStack(spacing: Spacing.md) {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [.red.opacity(0.65), .orange.opacity(0.5), .blue.opacity(0.55)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .overlay(alignment: .bottomLeading) {
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Text("Cross-body lead")
-                                .font(.headline.weight(.heavy))
-                            Text("0:14 loop")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.white.opacity(0.72))
-                        }
-                        .foregroundStyle(.white)
-                        .padding(Spacing.lg)
-                    }
-
-                HStack(spacing: Spacing.sm) {
-                    ForEach(["Basic", "Turn", "Lead"], id: \.self) { label in
-                        Text(label)
-                            .font(.caption.weight(.semibold))
-                            .padding(.horizontal, Spacing.sm)
-                            .frame(height: 26)
-                            .background(.white.opacity(0.14), in: Capsule())
-                    }
-                }
-                .foregroundStyle(.white)
-            }
-            .padding(Spacing.md)
-            .scaleEffect(pulse ? 1.018 : 1)
-        }
-        .padding(.horizontal, Spacing.xl2)
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
-                pulse = true
-            }
-        }
-    }
-}
-
-private struct PayoffLoopMock: View {
-    let reduceMotion: Bool
-    @State private var progress: CGFloat = 0.18
-
-    var body: some View {
-        VStack(spacing: Spacing.lg) {
-            ZStack(alignment: .bottomLeading) {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [.purple.opacity(0.58), .pink.opacity(0.52), .cyan.opacity(0.42)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .overlay(alignment: .center) {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 54, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.9))
-                    }
-
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text("Inside turn")
-                        .font(.title2.weight(.heavy))
-                    Text("Looping move")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.78))
-                }
-                .foregroundStyle(.white)
-                .padding(Spacing.lg)
-            }
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.secondary.opacity(0.2))
-                    Capsule()
-                        .fill(Color.accentColor)
-                        .frame(width: max(18, geo.size.width * progress))
-                }
-            }
-            .frame(height: 8)
-        }
-        .onAppear {
-            if reduceMotion {
-                progress = 0.72
-            } else {
-                withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
-                    progress = 0.92
-                }
-            }
-        }
-    }
-}
-
 private struct ProcessingMark: View {
     let reduceMotion: Bool
     @State private var rotation: Double = 0
@@ -941,14 +814,14 @@ private struct ProcessingMark: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.secondary.opacity(0.18), lineWidth: 12)
+                .stroke(Theme.stageRaisedSurface, lineWidth: 12)
             Circle()
                 .trim(from: 0.1, to: 0.72)
-                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 12, lineCap: .round))
+                .stroke(StyleAccentPalette.salsa.color, style: StrokeStyle(lineWidth: 12, lineCap: .round))
                 .rotationEffect(.degrees(rotation))
             Image(systemName: "sparkles")
                 .font(.title.weight(.semibold))
-                .foregroundStyle(.primary)
+                .foregroundStyle(Theme.stagePrimary)
         }
         .onAppear {
             guard !reduceMotion else { return }
@@ -956,5 +829,6 @@ private struct ProcessingMark: View {
                 rotation = 360
             }
         }
+        .accessibilityHidden(true)
     }
 }

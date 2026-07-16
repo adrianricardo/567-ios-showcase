@@ -5,9 +5,17 @@ struct StatusDot: View {
     var size: CGFloat = 10
 
     var body: some View {
-        Circle()
-            .fill(status.color)
-            .frame(width: size, height: size)
+        ZStack {
+            Circle().fill(status.color)
+            if status != .empty {
+                Image(systemName: status == .mastered ? "checkmark" : "exclamationmark")
+                    .font(.system(size: max(6, size * 0.58), weight: .black))
+                    .foregroundStyle(.black.opacity(0.78))
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityLabel("Status")
+        .accessibilityValue(status.displayName)
     }
 }
 
@@ -22,5 +30,7 @@ struct StatusBadge: View {
             .background(status.color.opacity(0.15))
             .foregroundStyle(status.color)
             .clipShape(Capsule())
+            .accessibilityLabel("Status")
+            .accessibilityValue(status.displayName)
     }
 }

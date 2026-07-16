@@ -11,6 +11,7 @@ import OSLog
     private(set) var isPlaying = false
     private(set) var currentVideoURL: URL?
     private(set) var videoSize: CGSize = .zero
+    private(set) var playbackErrorMessage: String?
 
     var isLooping: Bool = false {
         didSet { updateLoopObserver() }
@@ -45,6 +46,7 @@ import OSLog
         duration = 0
         currentTime = 0
         videoSize = .zero
+        playbackErrorMessage = nil
         pendingPlaybackStart = nil
         pendingPlaybackEnd = nil
         assetPreflightTask?.cancel()
@@ -114,6 +116,12 @@ import OSLog
         if isPlaying { pause() } else { play() }
     }
 
+    func retry() {
+        guard let url = currentVideoURL else { return }
+        currentVideoURL = nil
+        loadVideo(url: url)
+    }
+
     func seek(to t: TimeInterval) {
         guard t.isFinite, t >= 0 else {
             logger.error("Ignoring invalid seek time: \(t, privacy: .public)")
@@ -165,6 +173,7 @@ import OSLog
                         "Asset preflight succeeded: \(url.lastPathComponent, privacy: .public), playable=\(isPlayable, privacy: .public), duration=\(duration.seconds, privacy: .public), tracks=\(tracks.count, privacy: .public)"
                     )
                     if !isPlayable {
+                        controller.playbackErrorMessage = "This video couldn't be played."
                         controller.logger.error("Asset is not playable: \(url.lastPathComponent, privacy: .public)")
                     }
                 }
@@ -175,6 +184,7 @@ import OSLog
                           currentItem === controller.player.currentItem else { return }
                     controller.pendingPlaybackStart = nil
                     controller.pendingPlaybackEnd = nil
+                    controller.playbackErrorMessage = "This video couldn't be played."
                     controller.logger.error(
                         "Asset preflight failed: \(url.lastPathComponent, privacy: .public), error=\(error.localizedDescription, privacy: .public)"
                     )
@@ -196,6 +206,7 @@ import OSLog
                 controller.logger.error(
                     "Player item still not ready after timeout: \(url.lastPathComponent, privacy: .public), status=unknown, error=\(message, privacy: .public)"
                 )
+                controller.playbackErrorMessage = "This video is taking too long to load."
             }
         }
     }
@@ -206,6 +217,7 @@ import OSLog
         switch item.status {
         case .readyToPlay:
             readinessTimeoutTask?.cancel()
+            playbackErrorMessage = nil
             logger.info("Player item ready")
             playPendingRangeIfNeeded()
         case .failed:
@@ -213,6 +225,7 @@ import OSLog
             let message = item.error?.localizedDescription ?? "Unknown AVPlayerItem error"
             pendingPlaybackStart = nil
             pendingPlaybackEnd = nil
+            playbackErrorMessage = "This video couldn't be played."
             logger.error("Player item failed: \(message, privacy: .public)")
         case .unknown:
             logger.debug("Player item status unknown")

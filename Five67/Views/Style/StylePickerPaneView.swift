@@ -33,7 +33,9 @@ struct StylePickerPaneView: View {
             content
             exportFooter
         }
-        .background(Color(.systemBackground))
+        .foregroundStyle(Theme.stagePrimary)
+        .background(Theme.stageBackground)
+        .preferredColorScheme(.dark)
         .photosExportAttachments(
             isExporting: $isExporting,
             showExportTypeDialog: $showExportTypeDialog,
@@ -76,11 +78,12 @@ struct StylePickerPaneView: View {
 
     private var header: some View {
         Text("Styles")
-            .font(.title3.weight(.semibold))
+            .font(.system(.largeTitle, design: .rounded, weight: .bold))
+            .tracking(-0.8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, Spacing.lg)
-            .padding(.top, Spacing.mdPlus)
-            .padding(.bottom, Spacing.smPlus)
+            .padding(.top, Spacing.xl)
+            .padding(.bottom, Spacing.md)
     }
 
     // MARK: - Content
@@ -95,52 +98,42 @@ struct StylePickerPaneView: View {
         }
         .listStyle(.plain)
         .scrollIndicators(.hidden)
+        .scrollContentBackground(.hidden)
+        .background(Theme.stageBackground)
         .contentMargins(.bottom, Spacing.bottomBarClearance, for: .scrollContent)
     }
 
     private var allRow: some View {
-        Button {
-            select(nil)
-        } label: {
-            HStack {
-                Text("All")
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(.primary)
-                Spacer(minLength: 0)
-                if styleStore.activeStyle == nil {
-                    Image(systemName: "checkmark")
-                        .foregroundStyle(Color.accentColor)
-                }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .listRowInsets(EdgeInsets(top: Spacing.md, leading: Spacing.lg, bottom: Spacing.md, trailing: Spacing.lg))
+        StageSelectableRow(
+            title: "All styles",
+            isSelected: styleStore.activeStyle == nil,
+            action: { select(nil) }
+        )
+        .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.lg, bottom: Spacing.xs, trailing: Spacing.lg))
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
     }
 
     private func styleRow(_ style: Style) -> some View {
         let isActive = styleStore.activeStyle?.id == style.id
-        return Button {
-            select(style)
-        } label: {
-            HStack {
-                Text(style.name)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(.primary)
-                Spacer(minLength: 0)
-                if isActive {
-                    Image(systemName: "checkmark")
-                        .foregroundStyle(Color.accentColor)
-                }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .listRowInsets(EdgeInsets(top: Spacing.md, leading: Spacing.lg, bottom: Spacing.md, trailing: Spacing.lg))
+        let accent = StyleAccentPalette.accent(forName: style.name, id: style.id)?.color
+        return StageSelectableRow(
+            title: style.name,
+            identityColor: accent,
+            isSelected: isActive,
+            action: { select(style) }
+        )
+        .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.lg, bottom: Spacing.xs, trailing: Spacing.lg))
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
+        .accessibilityActions {
+            if !style.isDefault {
+                Button("Rename") {
+                    renameTarget = style
+                    showRenameSheet = true
+                }
+            }
+        }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if !style.isDefault {
                 Button {
@@ -161,16 +154,23 @@ struct StylePickerPaneView: View {
             HStack(spacing: Spacing.sm) {
                 Image(systemName: "plus.circle.fill")
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Theme.stagePrimary)
                 Text("Add new style")
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(Color.accentColor)
+                    .font(.body.weight(.bold))
+                    .foregroundStyle(Theme.stagePrimary)
                 Spacer(minLength: 0)
+            }
+            .padding(.horizontal, Spacing.lg)
+            .frame(minHeight: 56)
+            .background(Theme.stageSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Theme.stageStroke, lineWidth: 1)
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .listRowInsets(EdgeInsets(top: Spacing.md, leading: Spacing.lg, bottom: Spacing.md, trailing: Spacing.lg))
+        .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.lg, bottom: Spacing.xs, trailing: Spacing.lg))
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
     }
@@ -193,7 +193,7 @@ struct StylePickerPaneView: View {
                 Text("Export Library")
                     .font(.subheadline.weight(.medium))
             }
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Theme.stageSecondary)
             .padding(.vertical, Spacing.smPlus)
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())

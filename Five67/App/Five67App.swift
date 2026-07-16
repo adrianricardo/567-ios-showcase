@@ -23,9 +23,15 @@ struct Five67App: App {
             UserDefaults.standard.set("", forKey: "styleStore.activeStyleID")
             Self.seedUITestLibrary(in: container)
         }
-        if arguments.contains("-Five67UITestOnboardingCompletionFixture"),
+        if arguments.contains("-Five67UITestOnboardingCompletionFixture")
+            || arguments.contains("-Five67UITestReviewOnboarding"),
            case .success(let container) = result {
             UserDefaults.standard.set(false, forKey: OnboardingPreferences.Keys.hasCompleted)
+            if arguments.contains("-Five67UITestReviewOnboarding") {
+                UserDefaults.standard.removeObject(forKey: OnboardingPreferences.Keys.valueProps)
+                UserDefaults.standard.removeObject(forKey: OnboardingPreferences.Keys.danceStyles)
+                UserDefaults.standard.removeObject(forKey: OnboardingPreferences.Keys.videoVolume)
+            }
             Self.clearUITestLibrary(in: container)
         }
         _loadResult = State(initialValue: result)

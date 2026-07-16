@@ -62,6 +62,12 @@ struct VideoHeroView<Rail: View>: View {
                     .padding(.top, Spacing.lgPlus)
                     .padding(.trailing, Spacing.lgPlus)
             }
+            .overlay {
+                if let message = controller.playbackErrorMessage {
+                    PlaybackFailureView(message: message, retry: controller.retry)
+                        .padding(Spacing.xl2)
+                }
+            }
 
             TrimTrackView(
                 controller: controller,
@@ -99,6 +105,38 @@ struct VideoHeroView<Rail: View>: View {
         let state = controller.isPlaying ? "Playing" : "Paused"
         let duration = controller.duration > 0 ? controller.duration : video.duration
         return "\(state), \(formatTime(controller.currentTime)) of \(formatTime(duration))"
+    }
+}
+
+struct PlaybackFailureView: View {
+    let message: String
+    let retry: () -> Void
+
+    var body: some View {
+        VStack(spacing: Spacing.md) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.title2)
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+            Text(message)
+                .font(.headline)
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+            Button("Try again", action: retry)
+                .font(.headline.weight(.bold))
+                .foregroundStyle(.black)
+                .padding(.horizontal, Spacing.lg)
+                .frame(minHeight: Spacing.touchTarget)
+                .background(.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .padding(Spacing.lg)
+        .background(.black.opacity(0.82), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(.white.opacity(0.16))
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isModal)
     }
 }
 
