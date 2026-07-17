@@ -628,8 +628,8 @@ If App Store Connect or signing access is unavailable, do not claim release. Mar
 |---|---|---|---|---|
 | P0 | done | Codex implementation session | 2026-07-16 | Green build/tests/diff check; plan commit `9792afc`; exact Groups 0–5 baseline commit `2bad989` |
 | P1 | done | Codex implementation session | 2026-07-16 | Complete coverage matrix, Warm Stage implementation, accessibility/visual evidence, green verification; atomic commit `7a1842b` |
-| P2 | pending | - | - | Entitlement-backed paywall; Gate G2 required |
-| P3 | pending | - | - | Integrated release-candidate QA |
+| P2 | pending | - | 2026-07-17 | Entitlement-backed paywall; Gate G2 authorized |
+| P3 | pending | - | 2026-07-17 | Integrated release-candidate QA; Gate G3 satisfied |
 | P4 | pending | - | - | TestFlight/App Review; Gates G4–G5 required |
 
 Status values: `pending`, `in-progress`, `blocked`, `done`.
@@ -638,7 +638,7 @@ Status values: `pending`, `in-progress`, `blocked`, `done`.
 
 Current state: P0 is complete at clean commit `2bad989`; P1 implementation and verification are complete at atomic commit `7a1842b`. The implementation session began from the exact intentional Groups 0–5 dirty baseline recorded in `Current state snapshot`; all tracked diffs and untracked design artifacts were reviewed, and the 16 source/test files remained byte-for-byte identical to their recorded SHA-256 baseline through the P0 verification and commit boundary.
 
-Next step: stop at the approval boundary. P2 must not begin until Adrian authorizes G2. P3 must not begin until Adrian reviews the P1 coverage matrix/screenshots and satisfies G3.
+Next step: begin P2 entitlement-backed paywall implementation. G2 is authorized and G3 is satisfied; do not enter P4 submission actions until G4 evidence and G5 authorization are recorded.
 
 Files changed in P0: the existing Groups 0–5 source/test/design baseline was committed exactly as reviewed; stale migration-status wording was reconciled in `docs/design-migration.md`, `docs/README.md`, and `docs/design-foundation-brief.md`; this plan records progress and evidence.
 
@@ -706,11 +706,10 @@ Initial `git status --short` (2026-07-16, before implementation edits):
 Approval record:
 
 - **G1 authorized (2026-07-16):** Adrian explicitly instructed this implementation session to implement the plan sequentially beginning with P0, preserve the approved Groups 0–5 baseline exactly, and obey the approval gates. This authorizes the P0 baseline commits after the required evidence is green.
-- **G2 not yet authorized:** do not begin P2 paywall implementation until Adrian explicitly accepts the unlimited-videos/styles-only release cut and removal of iCloud cleanup copy.
-- **G3 ready for Adrian review, not yet satisfied:** the complete matrix is `docs/design-system-coverage.md`; representative ignored screenshots are under `build/release-evidence/design/`. Do not begin P3 until Adrian accepts them.
+- **G2 authorized (2026-07-17):** Adrian approved the unlimited-videos/styles-only release cut and removal of the unimplemented iCloud cleanup claim.
+- **G3 satisfied (2026-07-17):** Adrian accepted `docs/design-system-coverage.md` and the representative screenshots under `build/release-evidence/design/`.
 - **G4–G5 not yet authorized/satisfied.**
 
 Open questions:
 
-1. Gate G2: confirm the release paywall should sell unlimited videos/styles only and remove the unimplemented iCloud cleanup claim.
-2. Gate G5: confirm whether the implementing agent may push and submit, or must stop after TestFlight validation for Adrian to perform final submission.
+1. Gate G5: confirm whether the implementing agent may push and submit, or must stop after TestFlight validation for Adrian to perform final submission.
