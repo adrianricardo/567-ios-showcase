@@ -140,6 +140,10 @@ struct LibraryPaneView: View {
                 if let v = deleteVideoTarget { deleteVideo(v) }
             }
             Button("Cancel", role: .cancel) {}
+        } message: {
+            if let video = deleteVideoTarget {
+                Text(deletionImpactMessage(for: video))
+            }
         }
         .onAppear(perform: focusPendingArrival)
         .onChange(of: router.pendingLibraryArrival) { _, _ in
@@ -505,6 +509,16 @@ struct LibraryPaneView: View {
         try? FileManager.default.removeItem(at: video.fileURL)
         modelContext.delete(video)
         Haptics.medium()
+    }
+
+    private func deletionImpactMessage(for video: Video) -> String {
+        let namedMoveCount = video.moves.filter {
+            !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }.count
+        if namedMoveCount == 0 {
+            return "No named moves will be removed."
+        }
+        return "This also removes \(namedMoveCount) named \(namedMoveCount == 1 ? "move" : "moves") saved in this video."
     }
 
     // MARK: - Export

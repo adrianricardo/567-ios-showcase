@@ -452,81 +452,12 @@ struct OnboardingFlow: View {
     }
 
     private var paywallBeat: some View {
-        VStack(spacing: Spacing.xl4) {
-            VStack(spacing: Spacing.md) {
-                Text("Pay once. Yours forever.")
-                    .font(.largeTitle.weight(.heavy))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("Unlock unlimited moves — no subscription, ever.")
-                    .font(.body)
-                    .foregroundStyle(Theme.stageSecondary)
-                    .multilineTextAlignment(.center)
-            }
-
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                BulletLine("∞ Unlimited videos")
-                BulletLine("🎨 Unlimited styles")
-                BulletLine("☁️ iCloud cleanup (back up & clear your camera roll)")
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(Spacing.lg)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.stageSurface))
-            .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Theme.stageStroke, lineWidth: 1)
-            }
-
-            if let message = unlockStore.productLoadMessage {
-                Text(message)
-                    .font(.footnote)
-                    .foregroundStyle(Theme.stageSecondary)
-                    .multilineTextAlignment(.center)
-            }
-
-            if let message = unlockStore.purchaseMessage {
-                Text(message)
-                    .font(.footnote)
-                    .foregroundStyle(Theme.stageSecondary)
-                    .multilineTextAlignment(.center)
-            }
-
-            VStack(spacing: Spacing.md) {
-                primaryButton(unlockButtonTitle) {
-                    Task {
-                        if await unlockStore.purchase() {
-                            complete()
-                        }
-                    }
-                }
-                .disabled(!unlockStore.canPurchase)
-
-                secondaryButton("Maybe later") { complete() }
-
-                Button("Restore purchase") {
-                    Task {
-                        if await unlockStore.restore() {
-                            complete()
-                        }
-                    }
-                }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Theme.stageSecondary)
-                .frame(minHeight: Spacing.touchTarget)
-                .disabled(unlockStore.isRestoring)
-            }
-        }
-        .task {
-            if unlockStore.product == nil {
-                await unlockStore.loadProduct()
-            }
-        }
-    }
-
-    private var unlockButtonTitle: String {
-        if unlockStore.isPurchasing { return "Unlocking..." }
-        if unlockStore.isLoadingProduct { return "Loading unlock..." }
-        return "Unlock 567 — \(unlockStore.displayPrice)"
+        UnlockPaywallView(
+            reason: .onboarding,
+            secondaryTitle: "Maybe later",
+            onUnlocked: { complete() },
+            onSecondary: { complete() }
+        )
     }
 
     private func editorBeat(video: Video) -> some View {
@@ -686,6 +617,7 @@ struct OnboardingFlow: View {
         }
 
         styleStore.activeStyle = style
+        unlockStore.recordStyleUse(style.id)
         try? modelContext.save()
         return style
     }
@@ -790,7 +722,7 @@ private struct OnboardingProgressDots: View {
     }
 }
 
-private struct BulletLine: View {
+struct BulletLine: View {
     let text: String
 
     init(_ text: String) {

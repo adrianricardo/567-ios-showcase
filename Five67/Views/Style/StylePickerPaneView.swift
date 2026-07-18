@@ -6,9 +6,15 @@ import SwiftData
 /// to the Feed tab automatically. Defaults (Cumbia / Salsa / Bachata) are not
 /// renameable and not deletable.
 struct StylePickerPaneView: View {
+    private enum PendingStyleAction {
+        case select(UUID)
+        case create
+    }
+
     @Environment(\.modelContext) private var modelContext
     @Environment(StyleStore.self) private var styleStore
     @Environment(AppRouter.self) private var router
+    @Environment(UnlockStore.self) private var unlockStore
 
     @Query(sort: \Style.createdAt, order: .forward)
     private var styles: [Style]
@@ -16,6 +22,9 @@ struct StylePickerPaneView: View {
     @State private var renameTarget: Style?
     @State private var showRenameSheet = false
     @State private var showAddSheet = false
+    @State private var unlockPrompt: UnlockPromptReason?
+    @State private var pendingStyleAction: PendingStyleAction?
+    @State private var unlockSucceeded = false
 
     // Export
     @State private var isExporting = false
@@ -68,8 +77,14 @@ struct StylePickerPaneView: View {
             ) { newName in
                 let style = Style(name: newName)
                 modelContext.insert(style)
+                unlockStore.recordStyleUse(style.id)
                 styleStore.activeStyle = style
                 router.selectedTab = .feed
+            }
+        }
+        .sheet(item: $unlockPrompt, onDismiss: handleUnlockSheetDismiss) { reason in
+            UnlockPaywallSheet(reason: reason) {
+                unlockSucceeded = true
             }
         }
     }
@@ -149,7 +164,7 @@ struct StylePickerPaneView: View {
 
     private var addRow: some View {
         Button {
-            showAddSheet = true
+            requestStyleCreation()
         } label: {
             HStack(spacing: Spacing.sm) {
                 Image(systemName: "plus.circle.fill")
@@ -176,6 +191,14 @@ struct StylePickerPaneView: View {
     }
 
     private func select(_ style: Style?) {
+        guard unlockStore.canUseStyle(style?.id) else {
+            if let style {
+                pendingStyleAction = .select(style.id)
+                unlockPrompt = .styleLimit
+            }
+            return
+        }
+        unlockStore.recordStyleUse(style?.id)
         styleStore.activeStyle = style
         Haptics.select()
         router.selectedTab = .feed
@@ -184,24 +207,69 @@ struct StylePickerPaneView: View {
     // MARK: - Export
 
     private var exportFooter: some View {
-        Button {
-            showExportTypeDialog = true
-        } label: {
-            HStack(spacing: Spacing.sm) {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.subheadline.weight(.semibold))
-                Text("Export Library")
-                    .font(.subheadline.weight(.medium))
+        VStack(spacing: Spacing.xs) {
+            if !unlockStore.isUnlocked {
+                Button {
+                    pendingStyleAction = nil
+                    unlockPrompt = .durableEntry
+                } label: {
+                    Label("Unlock unlimited videos & styles", systemImage: "infinity")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(Theme.stagePrimary)
+                        .padding(.vertical, Spacing.smPlus)
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
-            .foregroundStyle(Theme.stageSecondary)
-            .padding(.vertical, Spacing.smPlus)
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
+
+            Button {
+                showExportTypeDialog = true
+            } label: {
+                HStack(spacing: Spacing.sm) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Export Library")
+                        .font(.subheadline.weight(.medium))
+                }
+                .foregroundStyle(Theme.stageSecondary)
+                .padding(.vertical, Spacing.smPlus)
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(isExporting)
         }
-        .buttonStyle(.plain)
-        .disabled(isExporting)
         .padding(.horizontal, Spacing.lg)
         .padding(.bottom, Spacing.bottomBarClearance)
+    }
+
+    private func requestStyleCreation() {
+        guard unlockStore.canUseStyle(UUID()) else {
+            pendingStyleAction = .create
+            unlockPrompt = .styleLimit
+            return
+        }
+        showAddSheet = true
+    }
+
+    private func resumePendingStyleAction() {
+        guard let action = pendingStyleAction else { return }
+        pendingStyleAction = nil
+        switch action {
+        case .select(let styleID):
+            if let style = styles.first(where: { $0.id == styleID }) {
+                select(style)
+            }
+        case .create:
+            showAddSheet = true
+        }
+    }
+
+    private func handleUnlockSheetDismiss() {
+        guard unlockSucceeded else { return }
+        unlockSucceeded = false
+        resumePendingStyleAction()
     }
 
     private func handleExporterResult(_ result: Result<URL, Error>) {

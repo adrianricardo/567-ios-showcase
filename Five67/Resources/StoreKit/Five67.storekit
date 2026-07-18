@@ -1,5 +1,5 @@
 {
-  "identifier" : "Five67LocalStoreKit",
+  "identifier" : "B5670000-0000-4000-8000-000000000001",
   "nonRenewingSubscriptions" : [
 
   ],
@@ -7,10 +7,10 @@
     {
       "displayPrice" : "6.99",
       "familyShareable" : true,
-      "internalID" : "five67-unlock-local",
+      "internalID" : "B5670000-0000-4000-8000-000000000002",
       "localizations" : [
         {
-          "description" : "Unlock unlimited videos, unlimited styles, and iCloud cleanup.",
+          "description" : "Unlock unlimited videos and unlimited dance styles.",
           "displayName" : "Five67 Unlock",
           "locale" : "en_US"
         }
@@ -21,12 +21,12 @@
     }
   ],
   "settings" : {
-    "_applicationInternalID" : "five67-local",
-    "_developerTeamID" : "HML25PC4DU",
     "_failTransactionsEnabled" : false,
-    "_lastSynchronizedDate" : 0,
     "_locale" : "en_US",
-    "_storefront" : "USA"
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ]
   },
   "subscriptionGroups" : [
 

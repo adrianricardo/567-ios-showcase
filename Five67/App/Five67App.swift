@@ -18,10 +18,21 @@ struct Five67App: App {
             UserDefaults.standard.set(true, forKey: OnboardingPreferences.Keys.hasCompleted)
         }
         let result = Self.loadContainer()
-        if arguments.contains("-Five67UITestSeedLibrary"), case .success(let container) = result {
+        if arguments.contains("-Five67UITestSeedLibrary")
+            || arguments.contains("-Five67UITestVideoCapFixture")
+            || arguments.contains("-Five67UITestAboveVideoCapFixture"),
+           case .success(let container) = result {
             UserDefaults.standard.set(PaneTab.moves.rawValue, forKey: "libraryPaneTab")
             UserDefaults.standard.set("", forKey: "styleStore.activeStyleID")
-            Self.seedUITestLibrary(in: container)
+            let videoCount: Int
+            if arguments.contains("-Five67UITestAboveVideoCapFixture") {
+                videoCount = AccessPolicy.freeVideoLimit + 2
+            } else if arguments.contains("-Five67UITestVideoCapFixture") {
+                videoCount = AccessPolicy.freeVideoLimit
+            } else {
+                videoCount = 1
+            }
+            Self.seedUITestLibrary(in: container, videoCount: videoCount)
         }
         if arguments.contains("-Five67UITestOnboardingCompletionFixture")
             || arguments.contains("-Five67UITestReviewOnboarding"),
@@ -50,9 +61,6 @@ struct Five67App: App {
                         .environment(router)
                         .environment(styleStore)
                         .environment(unlockStore)
-                        .task {
-                            unlockStore.start()
-                        }
                 case .failure(let error):
                     MigrationFailureView(error: error) {
                         Self.wipeDefaultStore()
@@ -84,7 +92,7 @@ struct Five67App: App {
         }
     }
 
-    private static func seedUITestLibrary(in container: ModelContainer) {
+    private static func seedUITestLibrary(in container: ModelContainer, videoCount: Int) {
         let context = container.mainContext
         let existing = (try? context.fetch(FetchDescriptor<Video>())) ?? []
         existing.forEach(context.delete)
@@ -92,17 +100,22 @@ struct Five67App: App {
         let fixtureFilename = prepareUITestVideo()
         let styles = Style.seedDefaultsIfNeeded(in: context)
         let salsa = styles.first { $0.id == Style.Default.salsa }
-        let video = Video(
-            displayName: "Studio 22 practice",
-            localFilename: fixtureFilename,
-            importedAt: Date(timeIntervalSince1970: 1_720_483_200),
-            recordedAt: Date(timeIntervalSince1970: 1_720_483_200),
-            duration: 24,
-            style: salsa
-        )
-        context.insert(video)
-        context.insert(Move(name: "Cross-body lead", time: 0, endTime: 12, video: video))
-        context.insert(Move(name: "Inside turn setup", time: 12, endTime: 24, video: video))
+        for index in 0..<videoCount {
+            let date = Date(timeIntervalSince1970: 1_720_483_200 + Double(index))
+            let video = Video(
+                displayName: index == 0 ? "Studio 22 practice" : "Practice video \(index + 1)",
+                localFilename: fixtureFilename,
+                importedAt: date,
+                recordedAt: date,
+                duration: 24,
+                style: salsa
+            )
+            context.insert(video)
+            if index == 0 {
+                context.insert(Move(name: "Cross-body lead", time: 0, endTime: 12, video: video))
+                context.insert(Move(name: "Inside turn setup", time: 12, endTime: 24, video: video))
+            }
+        }
         try? context.save()
     }
 

@@ -3,6 +3,7 @@ import SwiftUI
 
 struct OnboardingGateView<Content: View>: View {
     @Environment(AppRouter.self) private var router
+    @Environment(UnlockStore.self) private var unlockStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(OnboardingPreferences.Keys.hasCompleted) private var hasCompletedOnboarding = false
     @Query private var videos: [Video]
@@ -39,6 +40,7 @@ struct OnboardingGateView<Content: View>: View {
             }
         }
         .onAppear {
+            unlockStore.start(existingLibraryCount: videos.count)
             if OnboardingGatePolicy.shouldPresent(
                 hasCompletedOnboarding: hasCompletedOnboarding,
                 videoCount: videos.count

@@ -628,7 +628,7 @@ If App Store Connect or signing access is unavailable, do not claim release. Mar
 |---|---|---|---|---|
 | P0 | done | Codex implementation session | 2026-07-16 | Green build/tests/diff check; plan commit `9792afc`; exact Groups 0–5 baseline commit `2bad989` |
 | P1 | done | Codex implementation session | 2026-07-16 | Complete coverage matrix, Warm Stage implementation, accessibility/visual evidence, green verification; atomic commit `7a1842b` |
-| P2 | pending | - | 2026-07-17 | Entitlement-backed paywall; Gate G2 authorized |
+| P2 | done | Codex implementation session | 2026-07-17 | Implementation, cap-policy/UI tests, and 11-scenario StoreKit runtime matrix green on iOS 26.1 (23B86); physical TestFlight validation remains P4-owned |
 | P3 | pending | - | 2026-07-17 | Integrated release-candidate QA; Gate G3 satisfied |
 | P4 | pending | - | - | TestFlight/App Review; Gates G4–G5 required |
 
@@ -638,7 +638,20 @@ Status values: `pending`, `in-progress`, `blocked`, `done`.
 
 Current state: P0 is complete at clean commit `2bad989`; P1 implementation and verification are complete at atomic commit `7a1842b`. The implementation session began from the exact intentional Groups 0–5 dirty baseline recorded in `Current state snapshot`; all tracked diffs and untracked design artifacts were reviewed, and the 16 source/test files remained byte-for-byte identical to their recorded SHA-256 baseline through the P0 verification and commit boundary.
 
-Next step: begin P2 entitlement-backed paywall implementation. G2 is authorized and G3 is satisfied; do not enter P4 submission actions until G4 evidence and G5 authorization are recorded.
+Next step: begin P3 integrated release-candidate QA from the committed P2 boundary. G2 is authorized and G3 is satisfied; do not enter P4 submission actions until G4 evidence and G5 authorization are recorded.
+
+P2 implementation state (2026-07-17): one `AccessPolicy` now gates every additive video/style path through `UnlockStore`; free users receive 10 video slots and one durably claimed style, while paid and permanent legacy users remain unlimited. Existing content is never hidden or removed. Production-only `AppTransaction.originalAppVersion` evidence (build 52 or earlier) and a one-time pre-policy library snapshot persist `legacyUnlimited`; once an empty library has been observed under P2, later imports cannot accidentally reclassify that install as legacy even if receipt lookup was temporarily unavailable. Sandbox/Xcode evidence cannot falsely grandfather testers. Photos, Files, Library, global Add, style selection/creation/tagging, and editor assignment all converge on the same policy. The detached global Add control now routes to Feed before presenting the canonical source dialog, so the action remains visible from Library and Styles. Choosing “Not now” at a video cap clears the blocked import instead of reopening the source dialog, while partially admitted batches retain their pending style prompt. Cap hits and the durable Styles-footer entry use one reusable paywall with product-derived price, restore, focused status copy, and success announcements. The release-facing iCloud cleanup claim is removed from onboarding and both local StoreKit configurations. Video deletion now states the exact named-move impact.
+
+P2 checks run so far (2026-07-17):
+
+- `make build` — passed repeatedly; latest `build/logs/build.pretty.log` ends in `Build Succeeded`.
+- Focused access-policy suite — passed; 10 tests cover the 10-video boundary/batch overflow, paid/legacy overflow, one-style claim, production/sandbox/Xcode grandfather distinctions, durable style claim, one-time existing-library legacy persistence, resolved and receipt-unavailable post-policy relaunches without reclassification, and purchase outcome/revocation semantics.
+- Focused cap UI journeys — passed; 3 tests, zero failures. Video 11 presents the canonical paywall before Photos opens; choosing a second style presents the same paywall and returns to Styles with the intended context intact; a 12-video free library keeps video 12 accessible, blocks only the next import, and remains unchanged after “Not now.”
+- `make test` — passed on the final source state; all default Swift Testing suites and all 18 `TabBarVerifyTests` UI tests completed with zero failures. The 11-test StoreKitTest suite remains intentionally opt-in and is recorded separately below.
+- `make run-fresh` — passed; the app rebuilt, installed, and launched without a StoreKit configuration. The unavailable-product paywall behavior is covered by the green UI fixture journey.
+- `git diff --check` — passed.
+- Both `.storekit` files parse as JSON via `jq`; the non-consumable is family-shareable, priced at the local 6.99 fixture, and advertises only unlimited videos/styles.
+- StoreKitTest suite — passed 11/11 on the installed iOS 26.1 (23B86) runtime using the dedicated `Five67StoreKit` scheme and `FIVE67_RUN_STOREKIT_TESTS=1`. Coverage includes localized product load, purchase, cancellation, Ask to Buy, failure, unverified transaction, relaunch entitlement, restore, restore-none, refund/revocation with legacy preservation, and unavailable-product behavior. The iOS 26.4 runtime still reproduces Apple's `SKInternalErrorDomain Code=3` defect, so it is not the recorded P2 environment. Concise runtime evidence is stored under ignored `build/release-evidence/storekit/`; physical TestFlight sandbox validation remains P4-owned.
 
 Files changed in P0: the existing Groups 0–5 source/test/design baseline was committed exactly as reviewed; stale migration-status wording was reconciled in `docs/design-migration.md`, `docs/README.md`, and `docs/design-foundation-brief.md`; this plan records progress and evidence.
 

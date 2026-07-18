@@ -9,25 +9,78 @@ enum UnlockProduct {
 @MainActor
 @Observable final class UnlockStore {
     var product: Product?
-    var isUnlocked = false
     var isLoadingProduct = false
     var isPurchasing = false
     var isRestoring = false
     var productLoadMessage: String?
     var purchaseMessage: String?
 
-    @ObservationIgnored private var transactionUpdatesTask: Task<Void, Never>?
+    private(set) var hasPaidUnlock = false
+    private(set) var legacyUnlimited: Bool
+    private(set) var claimedFreeStyleID: UUID?
 
-    var displayPrice: String {
-        product?.displayPrice ?? "$6.99"
+    @ObservationIgnored private var transactionUpdatesTask: Task<Void, Never>?
+    @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let forcedAccessLevel: AccessLevel?
+
+    private enum Keys {
+        static let legacyUnlimited = "access.legacyUnlimited"
+        static let legacyEvaluationComplete = "access.legacyEvaluationComplete"
+        static let legacyLibrarySnapshotRecorded = "access.legacyLibrarySnapshotRecorded"
+        static let claimedFreeStyleID = "access.claimedFreeStyleID"
+    }
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("-Five67UITestPaidAccess") {
+            forcedAccessLevel = .paid
+        } else if arguments.contains("-Five67UITestLegacyAccess") {
+            forcedAccessLevel = .legacy
+        } else if arguments.contains("-Five67UITestFreeAccess") {
+            forcedAccessLevel = .free
+        } else {
+            forcedAccessLevel = nil
+        }
+        legacyUnlimited = defaults.bool(forKey: Keys.legacyUnlimited)
+        if forcedAccessLevel == .free {
+            let claimedFixtureStyle = arguments.contains("-Five67UITestClaimSalsaStyle")
+                ? Style.Default.salsa
+                : nil
+            claimedFreeStyleID = claimedFixtureStyle
+            defaults.set(claimedFixtureStyle?.uuidString, forKey: Keys.claimedFreeStyleID)
+        } else {
+            claimedFreeStyleID = defaults.string(forKey: Keys.claimedFreeStyleID)
+                .flatMap(UUID.init(uuidString:))
+        }
+    }
+
+    var accessLevel: AccessLevel {
+        if let forcedAccessLevel { return forcedAccessLevel }
+        if legacyUnlimited { return .legacy }
+        if hasPaidUnlock { return .paid }
+        return .free
+    }
+
+    var isUnlocked: Bool {
+        accessLevel.isUnlimited
+    }
+
+    var displayPrice: String? {
+        product?.displayPrice
     }
 
     var canPurchase: Bool {
         product != nil && !isLoadingProduct && !isPurchasing
     }
 
-    func start() {
+    func start(existingLibraryCount: Int) {
         guard transactionUpdatesTask == nil else { return }
+
+        evaluateLegacyAccess(
+            existingLibraryCount: existingLibraryCount,
+            installEvidence: nil
+        )
 
         transactionUpdatesTask = Task { [weak self] in
             for await result in Transaction.updates {
@@ -37,8 +90,31 @@ enum UnlockProduct {
 
         Task {
             await refreshEntitlements()
+            await evaluateAppTransactionForLegacyAccess(existingLibraryCount: existingLibraryCount)
             await loadProduct()
         }
+    }
+
+    func videoImportAllowance(currentVideoCount: Int, requestedCount: Int) -> VideoImportAllowance {
+        AccessPolicy.videoImportAllowance(
+            accessLevel: accessLevel,
+            currentVideoCount: currentVideoCount,
+            requestedCount: requestedCount
+        )
+    }
+
+    func canUseStyle(_ styleID: UUID?) -> Bool {
+        AccessPolicy.canUseStyle(
+            accessLevel: accessLevel,
+            claimedFreeStyleID: claimedFreeStyleID,
+            requestedStyleID: styleID
+        )
+    }
+
+    func recordStyleUse(_ styleID: UUID?) {
+        guard accessLevel == .free, claimedFreeStyleID == nil, let styleID else { return }
+        claimedFreeStyleID = styleID
+        defaults.set(styleID.uuidString, forKey: Keys.claimedFreeStyleID)
     }
 
     func loadProduct() async {
@@ -73,17 +149,21 @@ enum UnlockProduct {
             switch result {
             case .success(let verification):
                 await apply(transactionResult: verification, finish: true)
-                return isUnlocked
+                return hasPaidUnlock
             case .pending:
-                purchaseMessage = "Purchase pending approval."
+                apply(purchaseOutcome: .pending)
                 return false
             case .userCancelled:
+                apply(purchaseOutcome: .cancelled)
                 return false
             @unknown default:
                 return false
             }
+        } catch StoreKitError.userCancelled {
+            apply(purchaseOutcome: .cancelled)
+            return false
         } catch {
-            purchaseMessage = "Purchase failed. Try again when you're online."
+            apply(purchaseOutcome: .failed)
             return false
         }
     }
@@ -97,10 +177,10 @@ enum UnlockProduct {
         do {
             try await AppStore.sync()
             await refreshEntitlements()
-            if !isUnlocked {
+            if !hasPaidUnlock {
                 purchaseMessage = "No unlock purchase found."
             }
-            return isUnlocked
+            return hasPaidUnlock
         } catch {
             purchaseMessage = "Restore failed. Try again when you're online."
             return false
@@ -115,7 +195,7 @@ enum UnlockProduct {
             guard transaction.revocationDate == nil else { continue }
             hasUnlock = true
         }
-        isUnlocked = hasUnlock
+        apply(purchaseOutcome: .verified(active: hasUnlock))
     }
 
     private func apply(
@@ -123,12 +203,12 @@ enum UnlockProduct {
         finish: Bool
     ) async {
         guard let transaction = verifiedTransaction(from: result) else {
-            purchaseMessage = "We couldn't verify that purchase."
+            apply(purchaseOutcome: .unverified)
             return
         }
         guard transaction.productID == UnlockProduct.id else { return }
 
-        isUnlocked = transaction.revocationDate == nil
+        apply(purchaseOutcome: .verified(active: transaction.revocationDate == nil))
         if finish {
             await transaction.finish()
         }
@@ -142,6 +222,83 @@ enum UnlockProduct {
             transaction
         case .unverified:
             nil
+        }
+    }
+
+    private func apply(purchaseOutcome: UnlockPurchaseOutcome) {
+        let resolution = AccessPolicy.purchaseResolution(for: purchaseOutcome)
+        if let paidAccessOverride = resolution.paidAccessOverride {
+            hasPaidUnlock = paidAccessOverride
+        }
+        purchaseMessage = resolution.message
+    }
+
+    func evaluateLegacyAccess(
+        existingLibraryCount: Int,
+        installEvidence: AppInstallEvidence?
+    ) {
+        guard !legacyUnlimited else { return }
+        guard !defaults.bool(forKey: Keys.legacyEvaluationComplete) else { return }
+
+        let isInitialLibrarySnapshot = !defaults.bool(
+            forKey: Keys.legacyLibrarySnapshotRecorded
+        )
+        if isInitialLibrarySnapshot {
+            defaults.set(true, forKey: Keys.legacyLibrarySnapshotRecorded)
+        }
+
+        let shouldGrant = AccessPolicy.shouldGrantLegacyUnlimited(
+            existingLibraryCount: isInitialLibrarySnapshot ? existingLibraryCount : 0,
+            installEvidence: installEvidence
+        )
+        if shouldGrant {
+            persistLegacyUnlimited()
+        } else if installEvidence != nil {
+            // A verified app transaction is the durable new-vs-legacy decision.
+            // Once a new install is resolved, later user-created library content
+            // must not accidentally turn that free user into a legacy install.
+            defaults.set(true, forKey: Keys.legacyEvaluationComplete)
+        }
+    }
+
+    private func evaluateAppTransactionForLegacyAccess(existingLibraryCount: Int) async {
+        guard !legacyUnlimited else { return }
+        guard !defaults.bool(forKey: Keys.legacyEvaluationComplete) else { return }
+
+        do {
+            let result = try await AppTransaction.shared
+            guard case .verified(let appTransaction) = result else { return }
+            let evidence = AppInstallEvidence(
+                environment: installEnvironment(appTransaction.environment),
+                originalBuildVersion: appTransaction.originalAppVersion
+            )
+            evaluateLegacyAccess(
+                existingLibraryCount: existingLibraryCount,
+                installEvidence: evidence
+            )
+        } catch {
+            // Retry on a future launch. A transient App Store/network failure
+            // must not permanently decide that an empty-library legacy user is new.
+        }
+    }
+
+    private func persistLegacyUnlimited() {
+        legacyUnlimited = true
+        defaults.set(true, forKey: Keys.legacyUnlimited)
+        defaults.set(true, forKey: Keys.legacyEvaluationComplete)
+        defaults.set(true, forKey: Keys.legacyLibrarySnapshotRecorded)
+    }
+
+    private func installEnvironment(_ environment: AppStore.Environment) -> AppInstallEnvironment {
+        switch environment {
+        case .production:
+            .production
+        case .sandbox:
+            .sandbox
+        case .xcode:
+            .xcode
+        default:
+            .unknown
         }
     }
 }

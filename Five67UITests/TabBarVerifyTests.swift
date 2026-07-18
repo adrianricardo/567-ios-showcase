@@ -8,6 +8,7 @@ final class TabBarVerifyTests: XCTestCase {
         continueAfterFailure = false
         app = XCUIApplication()
         app.launchArguments.append("-Five67UITestSkipOnboarding")
+        app.launchArguments.append("-Five67UITestFreeAccess")
         app.launchArguments.append(contentsOf: additionalArguments)
         app.launch()
         sleep(2)
@@ -21,6 +22,7 @@ final class TabBarVerifyTests: XCTestCase {
         continueAfterFailure = false
         app = XCUIApplication()
         app.launchArguments.append("-Five67UITestOnboardingCompletionFixture")
+        app.launchArguments.append("-Five67UITestFreeAccess")
         app.launch()
 
         let maybeLater = app.buttons["Maybe later"]
@@ -42,6 +44,7 @@ final class TabBarVerifyTests: XCTestCase {
         continueAfterFailure = false
         app = XCUIApplication()
         app.launchArguments.append("-Five67UITestReviewOnboarding")
+        app.launchArguments.append("-Five67UITestFreeAccess")
         app.launch()
 
         let getStarted = app.buttons["Get started"]
@@ -96,6 +99,7 @@ final class TabBarVerifyTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments += [
             "-Five67UITestReviewOnboarding",
+            "-Five67UITestFreeAccess",
             "-UIPreferredContentSizeCategoryName",
             "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge"
         ]
@@ -237,6 +241,81 @@ final class TabBarVerifyTests: XCTestCase {
             alert.waitForExistence(timeout: 1) ||
             fromPhotos.waitForExistence(timeout: 1)
         XCTAssertTrue(dialogAppeared, "Add video dialog did not appear")
+    }
+
+    func testFreeVideoElevenPresentsPaywallWithoutOpeningPicker() throws {
+        launchApp(additionalArguments: ["-Five67UITestVideoCapFixture"])
+
+        let addButton = app.buttons["Add video"]
+        XCTAssertTrue(addButton.waitForExistence(timeout: 5))
+        addButton.tap()
+        XCTAssertTrue(app.buttons["From Photos"].waitForExistence(timeout: 3))
+        app.buttons["From Photos"].tap()
+
+        XCTAssertTrue(app.staticTexts["Keep building your library."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts[
+            "Your free library includes 10 videos. Unlock unlimited videos and styles."
+        ].exists)
+    }
+
+    func testFreeAboveCapLibraryRemainsAccessibleAndBlocksOnlyAddition() throws {
+        launchApp(additionalArguments: ["-Five67UITestAboveVideoCapFixture"])
+
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertTrue(tabBar.buttons["Library"].waitForExistence(timeout: 5))
+        tabBar.buttons["Library"].tap()
+        XCTAssertTrue(app.buttons["Videos"].waitForExistence(timeout: 3))
+        app.buttons["Videos"].tap()
+
+        let twelfthVideo = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS 'Practice video 12'")
+        ).firstMatch
+        for _ in 0..<8 where !twelfthVideo.exists {
+            app.swipeUp()
+        }
+        XCTAssertTrue(
+            twelfthVideo.waitForExistence(timeout: 3),
+            "A free library already above the cap must keep all existing videos accessible."
+        )
+
+        let addButton = app.buttons["Add video"]
+        XCTAssertTrue(addButton.waitForExistence(timeout: 5))
+        addButton.tap()
+        XCTAssertTrue(app.buttons["From Photos"].waitForExistence(timeout: 3))
+        app.buttons["From Photos"].tap()
+        XCTAssertTrue(app.staticTexts["Keep building your library."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Not now"].exists)
+        app.buttons["Not now"].tap()
+        XCTAssertTrue(tabBar.buttons["Library"].waitForExistence(timeout: 3))
+        tabBar.buttons["Library"].tap()
+        XCTAssertTrue(app.buttons["Videos"].waitForExistence(timeout: 3))
+        app.buttons["Videos"].tap()
+        for _ in 0..<8 where !twelfthVideo.exists {
+            app.swipeUp()
+        }
+        XCTAssertTrue(
+            twelfthVideo.waitForExistence(timeout: 3),
+            "Dismissing the cap paywall must leave the above-cap library unchanged."
+        )
+    }
+
+    func testFreeSecondStylePresentsCanonicalPaywall() throws {
+        launchApp(additionalArguments: [
+            "-Five67UITestSeedLibrary",
+            "-Five67UITestClaimSalsaStyle"
+        ])
+
+        let stylesTab = app.tabBars.firstMatch.buttons["Styles"]
+        XCTAssertTrue(stylesTab.waitForExistence(timeout: 5))
+        stylesTab.tap()
+        XCTAssertTrue(app.buttons["Bachata"].waitForExistence(timeout: 3))
+        app.buttons["Bachata"].tap()
+
+        XCTAssertTrue(app.staticTexts["Unlock your second style?"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Not now"].exists)
+        app.buttons["Not now"].tap()
+        XCTAssertTrue(app.staticTexts["Styles"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Bachata"].exists)
     }
 
     func testScreenshotsAllTabs() throws {

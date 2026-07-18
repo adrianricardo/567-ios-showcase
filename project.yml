@@ -69,6 +69,8 @@ targets:
     deploymentTarget: "18.0"
     sources:
       - path: Five67Tests
+      - path: Five67Tests/Resources/Five67Tests.storekit
+        buildPhase: resources
     dependencies:
       - target: Five67
     settings:
@@ -113,3 +115,17 @@ schemes:
       storeKitConfiguration: Five67/Resources/StoreKit/Five67.storekit
     archive:
       config: Release
+
+  Five67StoreKit:
+    build:
+      targets:
+        Five67: all
+        Five67Tests: [test]
+    test:
+      targets:
+        - Five67Tests
+      environmentVariables:
+        FIVE67_RUN_STOREKIT_TESTS: "1"
+    run:
+      config: Debug
+      storeKitConfiguration: Five67/Resources/StoreKit/Five67.storekit

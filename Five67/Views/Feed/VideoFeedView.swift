@@ -5,6 +5,11 @@ import PhotosUI
 import UIKit
 
 struct VideoFeedView: View {
+    private enum ImportSource {
+        case photos
+        case files
+    }
+
     private enum AccessibilityFocus: Hashable {
         case selectedResult
     }
@@ -13,6 +18,7 @@ struct VideoFeedView: View {
     @Environment(\.colorScheme) private var systemColorScheme
     @Environment(PlaybackSession.self) private var session
     @Environment(StyleStore.self) private var styleStore
+    @Environment(UnlockStore.self) private var unlockStore
     @Environment(AppRouter.self) private var router
     // Order shared with the Library tab so the feed's "n / total" position
     // matches the list. importedAt is always present (recordedAt can be nil for
@@ -51,6 +57,10 @@ struct VideoFeedView: View {
 
     // Add-video action sheet, presented by the Add button or Library import actions.
     @State private var showAddVideoDialog = false
+    @State private var unlockPrompt: UnlockPromptReason?
+    @State private var pendingImportSource: ImportSource?
+    @State private var pendingStyleTagID: UUID?
+    @State private var unlockSucceeded = false
 
     // Axis lock for the feed drag gesture — once a drag commits to an axis it
     // stays there. Vertical pages between videos; horizontal scrubs the playhead.
@@ -209,9 +219,12 @@ struct VideoFeedView: View {
             titleVisibility: .visible
         ) {
             ForEach(allStyles) { style in
-                Button(style.name) { applyStyleToTargets(style) }
+                Button(style.name) { requestStyleForTargets(style) }
             }
-            Button("Skip", role: .cancel) { styleTagTargets = [] }
+            Button("Skip", role: .cancel) {
+                styleTagTargets = []
+                pendingStyleTagID = nil
+            }
         } message: {
             Text("Tagging keeps videos in the right style mode. You can change it later from the editor.")
         }
@@ -220,9 +233,14 @@ struct VideoFeedView: View {
             isPresented: $showAddVideoDialog,
             titleVisibility: .visible
         ) {
-            Button("From Photos") { showPhotosPicker = true }
-            Button("From Files")  { showFilesImporter = true }
+            Button("From Photos") { requestImport(.photos) }
+            Button("From Files")  { requestImport(.files) }
             Button("Cancel", role: .cancel) {}
+        }
+        .sheet(item: $unlockPrompt, onDismiss: handleUnlockSheetDismiss) { reason in
+            UnlockPaywallSheet(reason: reason) {
+                unlockSucceeded = true
+            }
         }
     }
 
@@ -593,7 +611,7 @@ struct VideoFeedView: View {
 
             VStack(spacing: Spacing.md) {
                 Button {
-                    showPhotosPicker = true
+                    requestImport(.photos)
                 } label: {
                     Label("Import from Photos", systemImage: "photo.on.rectangle")
                         .font(.headline.weight(.bold))
@@ -603,7 +621,7 @@ struct VideoFeedView: View {
                         .background(.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
                 Button {
-                    showFilesImporter = true
+                    requestImport(.files)
                 } label: {
                     Label("Import from Files", systemImage: "folder")
                         .font(.headline.weight(.semibold))
@@ -940,8 +958,19 @@ struct VideoFeedView: View {
 
     private func applyStyleToTargets(_ style: Style) {
         for video in styleTagTargets { video.style = style }
+        unlockStore.recordStyleUse(style.id)
         styleTagTargets = []
+        pendingStyleTagID = nil
         Haptics.success()
+    }
+
+    private func requestStyleForTargets(_ style: Style) {
+        guard unlockStore.canUseStyle(style.id) else {
+            pendingStyleTagID = style.id
+            unlockPrompt = .styleLimit
+            return
+        }
+        applyStyleToTargets(style)
     }
 
     private func resetCoach() {
@@ -1152,9 +1181,13 @@ struct VideoFeedView: View {
         isImporting = true
         defer { isImporting = false }
 
+        let allowance = unlockStore.videoImportAllowance(
+            currentVideoCount: allVideos.count,
+            requestedCount: items.count
+        )
         var firstError: String?
         var imported: [Video] = []
-        for item in items {
+        for item in items.prefix(allowance.allowedCount) {
             let existingSourceIDs = Dictionary(uniqueKeysWithValues: allVideos.compactMap { v in
                 v.sourceAssetID.map { ($0, v.id) }
             })
@@ -1167,16 +1200,27 @@ struct VideoFeedView: View {
                 if firstError == nil { firstError = error.localizedDescription }
             }
         }
-        finishImport(imported: imported, firstError: firstError)
+        finishImport(
+            imported: imported,
+            firstError: firstError,
+            deferStylePrompt: allowance.requiresUnlock
+        )
+        if allowance.requiresUnlock {
+            unlockPrompt = .videoLimit
+        }
     }
 
     private func handleFilesImport(_ urls: [URL]) async {
         isImporting = true
         defer { isImporting = false }
 
+        let allowance = unlockStore.videoImportAllowance(
+            currentVideoCount: allVideos.count,
+            requestedCount: urls.count
+        )
         var firstError: String?
         var imported: [Video] = []
-        for url in urls {
+        for url in urls.prefix(allowance.allowedCount) {
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
             do {
@@ -1186,14 +1230,25 @@ struct VideoFeedView: View {
                 if firstError == nil { firstError = error.localizedDescription }
             }
         }
-        finishImport(imported: imported, firstError: firstError)
+        finishImport(
+            imported: imported,
+            firstError: firstError,
+            deferStylePrompt: allowance.requiresUnlock
+        )
+        if allowance.requiresUnlock {
+            unlockPrompt = .videoLimit
+        }
     }
 
-    private func finishImport(imported: [Video], firstError: String?) {
+    private func finishImport(
+        imported: [Video],
+        firstError: String?,
+        deferStylePrompt: Bool
+    ) {
         if !imported.isEmpty {
             Haptics.success()
             styleTagTargets = imported
-            showStyleTagPrompt = true
+            showStyleTagPrompt = !deferStylePrompt
         }
         if let firstError {
             importError = firstError
@@ -1206,6 +1261,59 @@ struct VideoFeedView: View {
         let video = VideoImportPersistence.insertVideo(from: result, in: modelContext)
         selectedIndex = 0
         return video
+    }
+
+    private func requestImport(_ source: ImportSource) {
+        let allowance = unlockStore.videoImportAllowance(
+            currentVideoCount: allVideos.count,
+            requestedCount: 1
+        )
+        guard allowance.allowedCount == 1 else {
+            pendingImportSource = source
+            unlockPrompt = .videoLimit
+            return
+        }
+        openImporter(source)
+    }
+
+    private func openImporter(_ source: ImportSource) {
+        switch source {
+        case .photos:
+            showPhotosPicker = true
+        case .files:
+            showFilesImporter = true
+        }
+    }
+
+    private func resumePendingAccessIntent() {
+        if let styleID = pendingStyleTagID,
+           let style = allStyles.first(where: { $0.id == styleID }) {
+            applyStyleToTargets(style)
+            return
+        }
+        if let source = pendingImportSource {
+            pendingImportSource = nil
+            openImporter(source)
+        }
+    }
+
+    private func resumeDeferredPromptAfterUnlockSheet() {
+        if !styleTagTargets.isEmpty {
+            showStyleTagPrompt = true
+        }
+    }
+
+    private func handleUnlockSheetDismiss() {
+        if unlockSucceeded {
+            unlockSucceeded = false
+            resumePendingAccessIntent()
+        } else {
+            // "Not now" cancels the blocked import instead of reopening the
+            // source dialog in a loop. Any videos already admitted from a
+            // partially allowed batch still proceed to their style prompt.
+            pendingImportSource = nil
+        }
+        resumeDeferredPromptAfterUnlockSheet()
     }
 }
 

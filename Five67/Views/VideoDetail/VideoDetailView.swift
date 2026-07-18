@@ -15,6 +15,9 @@ struct VideoDetailView: View {
     @State private var showRename = false
     @State private var showDeleteConfirm = false
     @State private var didApplyStartTime = false
+    @State private var unlockPrompt: UnlockPromptReason?
+    @State private var pendingStyleID: UUID?
+    @State private var unlockSucceeded = false
     // Start time of the most recently marked move during this editor session.
     // Reported back to the caller on Done so the feed can re-open on the new
     // move's first frame. Nil means the user didn't mark anything → caller
@@ -24,6 +27,7 @@ struct VideoDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(AppRouter.self) private var router
+    @Environment(UnlockStore.self) private var unlockStore
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
 
     @Query(sort: \Style.createdAt, order: .forward) private var allStyles: [Style]
@@ -102,6 +106,11 @@ struct VideoDetailView: View {
                     video.displayName = newName
                 }
             }
+            .sheet(item: $unlockPrompt, onDismiss: handleUnlockSheetDismiss) { reason in
+                UnlockPaywallSheet(reason: reason) {
+                    unlockSucceeded = true
+                }
+            }
             .confirmationDialog(
                 "Delete \"\(video.displayName)\"?",
                 isPresented: $showDeleteConfirm,
@@ -111,6 +120,8 @@ struct VideoDetailView: View {
                     deleteCurrentVideo()
                 }
                 Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(deletionImpactMessage)
             }
             .preferredColorScheme(.dark)
     }
@@ -219,10 +230,40 @@ struct VideoDetailView: View {
     private var styleBinding: Binding<UUID?> {
         Binding(
             get: { video.style?.id },
-            set: { newID in
-                video.style = newID.flatMap { id in allStyles.first(where: { $0.id == id }) }
-            }
+            set: { requestStyleChange(to: $0) }
         )
+    }
+
+    private func requestStyleChange(to newID: UUID?) {
+        guard unlockStore.canUseStyle(newID) else {
+            pendingStyleID = newID
+            unlockPrompt = .styleLimit
+            return
+        }
+        unlockStore.recordStyleUse(newID)
+        video.style = newID.flatMap { id in allStyles.first(where: { $0.id == id }) }
+    }
+
+    private func applyPendingStyle() {
+        let styleID = pendingStyleID
+        pendingStyleID = nil
+        requestStyleChange(to: styleID)
+    }
+
+    private func handleUnlockSheetDismiss() {
+        guard unlockSucceeded else { return }
+        unlockSucceeded = false
+        applyPendingStyle()
+    }
+
+    private var deletionImpactMessage: String {
+        let namedMoveCount = video.moves.filter {
+            !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }.count
+        if namedMoveCount == 0 {
+            return "No named moves will be removed."
+        }
+        return "This also removes \(namedMoveCount) named \(namedMoveCount == 1 ? "move" : "moves") saved in this video."
     }
 
     @ViewBuilder
