@@ -1,6 +1,6 @@
 # 0006 — Finish, polish, monetize, and release
 
-**Status:** Ready for implementation after Adrian confirms the paywall release cut in Gate G2.
+**Status:** P3 release candidate complete; P4 remains gated on physical TestFlight evidence (G4) and Adrian's explicit submission authorization (G5).
 
 **Milestone:** Finish all in-flight iOS work, commit it, apply the approved design system across the entire user-facing app (including every onboarding beat and the paywall), finish and test a truthful entitlement-backed paywall, and ship the resulting update through TestFlight and App Review.
 
@@ -629,16 +629,32 @@ If App Store Connect or signing access is unavailable, do not claim release. Mar
 | P0 | done | Codex implementation session | 2026-07-16 | Green build/tests/diff check; plan commit `9792afc`; exact Groups 0–5 baseline commit `2bad989` |
 | P1 | done | Codex implementation session | 2026-07-16 | Complete coverage matrix, Warm Stage implementation, accessibility/visual evidence, green verification; atomic commit `7a1842b` |
 | P2 | done | Codex implementation session | 2026-07-17 | Implementation, cap-policy/UI tests, and 11-scenario StoreKit runtime matrix green on iOS 26.1 (23B86); physical TestFlight validation remains P4-owned |
-| P3 | pending | - | 2026-07-17 | Integrated release-candidate QA; Gate G3 satisfied |
+| P3 | done | Codex implementation session | 2026-07-19 | Integrated regression, accessibility, visual, Release-bundle, and StoreKit evidence green; release fixes committed at `e01074e` |
 | P4 | pending | - | - | TestFlight/App Review; Gates G4–G5 required |
 
 Status values: `pending`, `in-progress`, `blocked`, `done`.
 
 ## Handoff
 
-Current state: P0 is complete at clean commit `2bad989`; P1 implementation and verification are complete at atomic commit `7a1842b`. The implementation session began from the exact intentional Groups 0–5 dirty baseline recorded in `Current state snapshot`; all tracked diffs and untracked design artifacts were reviewed, and the 16 source/test files remained byte-for-byte identical to their recorded SHA-256 baseline through the P0 verification and commit boundary.
+Current state: P0 is complete at clean commit `2bad989`; P1 is complete at atomic commit `7a1842b`; P2 is complete at atomic commit `5d5cf0b`; and P3 implementation, release-candidate QA, and concrete release-defect fixes are complete at candidate implementation commit `e01074e168a26e7c0443658a778e4182d968c02c`.
 
-Next step: begin P3 integrated release-candidate QA from the committed P2 boundary. G2 is authorized and G3 is satisfied; do not enter P4 submission actions until G4 evidence and G5 authorization are recorded.
+Next step: P4 may begin only when Adrian wants to prepare the exact committed candidate for TestFlight. Obtain G4 from the uploaded build's physical-device new-user, legacy-user, purchase, and restore smoke tests, then obtain explicit G5 authorization before pushing, submitting, or releasing. No P4 archive, upload, submission, or release action was performed during P3.
+
+P3 implementation state (2026-07-19): release-only builds no longer compile UI-test launch arguments or deterministic fixture seeding, and `Five67.storekit` is excluded from the production app bundle while remaining attached to the Xcode StoreKit scheme. Forced UI-test access no longer starts live StoreKit observation, preventing Apple account UI from contaminating deterministic accessibility evidence. The global Add action now uses one durable router event: it selects Feed before emitting a fresh request token, eliminating the intermittent lost-dialog race while keeping every Add entry point on the same implementation path.
+
+P3 checks run (2026-07-19):
+
+- `make doctor` — passed.
+- `make build` — passed; `build/logs/build.pretty.log` ends in `Build Succeeded`.
+- `make test TEST_DESTINATION='platform=iOS Simulator,id=B3F75E1D-D505-428A-853E-64390CFD3A5C'` — passed on the stable iPhone 16e / iOS 26.1 simulator; all Swift Testing suites and all 18 UI tests completed with zero failures. The accepted V3→V4 duplicate-`ZSTYLE` diagnostics remain unchanged.
+- Focused router suite — passed, including the new assertion that each Add request routes to Feed and emits a fresh event.
+- Focused Add UI journey — passed 3/3 consecutive iterations after the event-race fix.
+- StoreKitTest suite — passed 11/11 on iOS 26.1 during P3, covering product load, success, cancellation, Ask to Buy, failure, invalid verification, relaunch entitlement, restore, restore-none, refund/revocation with legacy preservation, and unavailable products. A later redundant rerun was interrupted after Apple's simulator StoreKit service failed to provide a purchase UI anchor; it produced no test assertion failure, and the intervening source changes affect only UI-test-fixture routing, not StoreKit transaction behavior.
+- Accessibility/device matrix — passed critical onboarding and practice journeys on iPhone 16e and the large iPhone 17 Pro Max, including accessibility XXXL Dynamic Type, Reduce Motion, Increase Contrast, and VoiceOver. Color and deterministic grayscale review confirmed selection/current states remain understandable without color.
+- Release audit — a generic iOS Simulator Release build passed with no new compiler warnings; the final app contains no `.storekit` file or UI-test fixture strings. `Info.plist` and `PrivacyInfo.xcprivacy` were inspected, and no unjustified entitlement was present.
+- `git diff --check` — passed.
+
+The default iOS 26.4 iPhone 17 Pro simulator became unreliable during the final full-suite reruns, first timing out while loading Accessibility and then timing out while synthesizing an event. These were XCTest/simulator infrastructure failures, not app assertions. Erasing that simulator did not resolve its extreme input latency, so the installed iOS 26.1 simulator is the authoritative final gate. P3 screenshots and concise runtime artifacts remain ignored under `build/release-evidence/p3/`.
 
 P2 implementation state (2026-07-17): one `AccessPolicy` now gates every additive video/style path through `UnlockStore`; free users receive 10 video slots and one durably claimed style, while paid and permanent legacy users remain unlimited. Existing content is never hidden or removed. Production-only `AppTransaction.originalAppVersion` evidence (build 52 or earlier) and a one-time pre-policy library snapshot persist `legacyUnlimited`; once an empty library has been observed under P2, later imports cannot accidentally reclassify that install as legacy even if receipt lookup was temporarily unavailable. Sandbox/Xcode evidence cannot falsely grandfather testers. Photos, Files, Library, global Add, style selection/creation/tagging, and editor assignment all converge on the same policy. The detached global Add control now routes to Feed before presenting the canonical source dialog, so the action remains visible from Library and Styles. Choosing “Not now” at a video cap clears the blocked import instead of reopening the source dialog, while partially admitted batches retain their pending style prompt. Cap hits and the durable Styles-footer entry use one reusable paywall with product-derived price, restore, focused status copy, and success announcements. The release-facing iCloud cleanup claim is removed from onboarding and both local StoreKit configurations. Video deletion now states the exact named-move impact.
 
