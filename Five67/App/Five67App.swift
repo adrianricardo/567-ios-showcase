@@ -1,7 +1,10 @@
-import AVFoundation
-import CoreVideo
 import SwiftUI
 import SwiftData
+
+#if DEBUG
+import AVFoundation
+import CoreVideo
+#endif
 
 @main
 struct Five67App: App {
@@ -13,11 +16,14 @@ struct Five67App: App {
     @State private var splashFinished = false
 
     init() {
+#if DEBUG
         let arguments = ProcessInfo.processInfo.arguments
         if arguments.contains("-Five67UITestSkipOnboarding") {
             UserDefaults.standard.set(true, forKey: OnboardingPreferences.Keys.hasCompleted)
         }
+#endif
         let result = Self.loadContainer()
+#if DEBUG
         if arguments.contains("-Five67UITestSeedLibrary")
             || arguments.contains("-Five67UITestVideoCapFixture")
             || arguments.contains("-Five67UITestAboveVideoCapFixture"),
@@ -45,6 +51,7 @@ struct Five67App: App {
             }
             Self.clearUITestLibrary(in: container)
         }
+#endif
         _loadResult = State(initialValue: result)
     }
 
@@ -92,6 +99,7 @@ struct Five67App: App {
         }
     }
 
+#if DEBUG
     private static func seedUITestLibrary(in container: ModelContainer, videoCount: Int) {
         let context = container.mainContext
         let existing = (try? context.fetch(FetchDescriptor<Video>())) ?? []
@@ -195,6 +203,7 @@ struct Five67App: App {
         existing.forEach(context.delete)
         try? context.save()
     }
+#endif
 
     /// Removes the SwiftData store files. Only invoked from the explicit "Reset library"
     /// action in `MigrationFailureView`. **Never** called as a silent fallback.

@@ -72,9 +72,11 @@ struct OnboardingFlow: View {
             Text(importError ?? "An unknown error occurred.")
         }
         .onAppear {
+#if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-Five67UITestOnboardingCompletionFixture") {
                 beat = .paywall
             }
+#endif
             selectedValueProps = preferences.savedValueProps()
             let savedStyles = preferences.savedDanceStyles()
             selectedStyles = styleOptions.first(where: savedStyles.contains).map { [$0] } ?? []

@@ -22,6 +22,8 @@ targets:
     deploymentTarget: "18.0"
     sources:
       - path: Five67
+        excludes:
+          - Resources/StoreKit
     resources:
       - path: Five67/Resources/Assets.xcassets
       - path: Five67/Resources/PrivacyInfo.xcprivacy

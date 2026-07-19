@@ -87,6 +87,21 @@ struct LibraryPresentationTests {
         #expect(router.feedFocusRequestID != nil)
     }
 
+    @Test @MainActor func add_video_request_routes_to_feed_with_a_fresh_event() {
+        let router = AppRouter()
+        router.selectedTab = .style
+
+        router.requestAddVideo()
+        let firstRequestID = router.addVideoRequestID
+
+        #expect(router.selectedTab == .feed)
+        #expect(firstRequestID != nil)
+
+        router.requestAddVideo()
+
+        #expect(router.addVideoRequestID != firstRequestID)
+    }
+
     @Test func local_mode_control_has_two_stable_scan_labels() {
         #expect(PaneTab.allCases == [.moves, .videos])
         #expect(PaneTab.moves.label == "Moves")

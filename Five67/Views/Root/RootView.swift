@@ -20,12 +20,10 @@ struct RootView: View {
                         }
                     },
                     onImportPhotos: {
-                        router.addVideoRequested = true
-                        router.selectedTab = .feed
+                        router.requestAddVideo()
                     },
                     onImportFiles: {
-                        router.addVideoRequested = true
-                        router.selectedTab = .feed
+                        router.requestAddVideo()
                     }
                 )
             }
@@ -52,9 +50,8 @@ struct RootView: View {
             // Intercept before the empty add pane renders. Feed owns every
             // import source and paywall decision, so its dialog stays visible
             // regardless of which tab initiated the action.
-            router.addVideoRequested = true
             Haptics.light()
-            router.selectedTab = .feed
+            router.requestAddVideo()
         }
     }
 }

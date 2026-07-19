@@ -32,27 +32,35 @@ enum UnlockProduct {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+#if DEBUG
         let arguments = ProcessInfo.processInfo.arguments
+        let uiTestAccessLevel: AccessLevel?
         if arguments.contains("-Five67UITestPaidAccess") {
-            forcedAccessLevel = .paid
+            uiTestAccessLevel = .paid
         } else if arguments.contains("-Five67UITestLegacyAccess") {
-            forcedAccessLevel = .legacy
+            uiTestAccessLevel = .legacy
         } else if arguments.contains("-Five67UITestFreeAccess") {
-            forcedAccessLevel = .free
+            uiTestAccessLevel = .free
         } else {
-            forcedAccessLevel = nil
+            uiTestAccessLevel = nil
         }
+#else
+        let uiTestAccessLevel: AccessLevel? = nil
+#endif
+        forcedAccessLevel = uiTestAccessLevel
         legacyUnlimited = defaults.bool(forKey: Keys.legacyUnlimited)
+#if DEBUG
         if forcedAccessLevel == .free {
             let claimedFixtureStyle = arguments.contains("-Five67UITestClaimSalsaStyle")
                 ? Style.Default.salsa
                 : nil
             claimedFreeStyleID = claimedFixtureStyle
             defaults.set(claimedFixtureStyle?.uuidString, forKey: Keys.claimedFreeStyleID)
-        } else {
-            claimedFreeStyleID = defaults.string(forKey: Keys.claimedFreeStyleID)
-                .flatMap(UUID.init(uuidString:))
+            return
         }
+#endif
+        claimedFreeStyleID = defaults.string(forKey: Keys.claimedFreeStyleID)
+            .flatMap(UUID.init(uuidString:))
     }
 
     var accessLevel: AccessLevel {
@@ -76,6 +84,7 @@ enum UnlockProduct {
 
     func start(existingLibraryCount: Int) {
         guard transactionUpdatesTask == nil else { return }
+        guard forcedAccessLevel == nil else { return }
 
         evaluateLegacyAccess(
             existingLibraryCount: existingLibraryCount,

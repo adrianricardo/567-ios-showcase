@@ -271,10 +271,10 @@ struct VideoFeedView: View {
             guard requestID != nil, router.selectedTab == .feed else { return }
             focusSelectedResult(consumeRouterRequest: true)
         }
-        .onChange(of: router.addVideoRequested) { _, requested in
-            guard requested else { return }
+        .onChange(of: router.addVideoRequestID, initial: true) { _, requestID in
+            guard requestID != nil else { return }
             showAddVideoDialog = true
-            router.addVideoRequested = false
+            router.addVideoRequestID = nil
         }
         .onChange(of: selectedIndex) { _, _ in syncWindow(autoplay: true) }
         .onChange(of: styleStore.activeStyle) { _, _ in

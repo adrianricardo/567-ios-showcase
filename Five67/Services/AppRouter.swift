@@ -32,8 +32,9 @@ enum AppTab: Hashable {
     /// Changes whenever a Library selection should receive focus after routing
     /// to Feed. The selected object still travels through `pendingFeedSelection`.
     var feedFocusRequestID: UUID?
-    /// Set by the Add button or Library import actions; consumed + cleared by the Feed.
-    var addVideoRequested = false
+    /// Replaced for every Add button or Library import action so the Feed can
+    /// consume a request even when it is mounted during a tab transition.
+    var addVideoRequestID: UUID?
     /// True while the Feed needs the Add button hidden (coach beats, editor).
     var hidesBottomChrome = false
     /// The Feed's currently active video — used by Library to highlight now-playing.
@@ -50,5 +51,10 @@ enum AppTab: Hashable {
         pendingFeedSelection = selection
         selectedTab = .feed
         feedFocusRequestID = UUID()
+    }
+
+    func requestAddVideo() {
+        selectedTab = .feed
+        addVideoRequestID = UUID()
     }
 }
