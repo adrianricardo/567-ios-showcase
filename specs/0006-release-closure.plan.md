@@ -1,6 +1,6 @@
 # 0006 — Finish, polish, monetize, and release
 
-**Status:** P3 release candidate complete; P4 remains gated on physical TestFlight evidence (G4) and Adrian's explicit submission authorization (G5).
+**Status:** P4 in progress; App Store Connect preparation, archive/upload, and physical TestFlight evidence (G4) are active. Push, App Review submission, and release remain gated on Adrian's explicit authorization (G5).
 
 **Milestone:** Finish all in-flight iOS work, commit it, apply the approved design system across the entire user-facing app (including every onboarding beat and the paywall), finish and test a truthful entitlement-backed paywall, and ship the resulting update through TestFlight and App Review.
 
@@ -630,7 +630,7 @@ If App Store Connect or signing access is unavailable, do not claim release. Mar
 | P1 | done | Codex implementation session | 2026-07-16 | Complete coverage matrix, Warm Stage implementation, accessibility/visual evidence, green verification; atomic commit `7a1842b` |
 | P2 | done | Codex implementation session | 2026-07-17 | Implementation, cap-policy/UI tests, and 11-scenario StoreKit runtime matrix green on iOS 26.1 (23B86); physical TestFlight validation remains P4-owned |
 | P3 | done | Codex implementation session | 2026-07-19 | Integrated regression, accessibility, visual, Release-bundle, and StoreKit evidence green; release fixes committed at `e01074e` |
-| P4 | pending | - | - | TestFlight/App Review; Gates G4–G5 required |
+| P4 | in-progress | Codex implementation session | 2026-07-20 | Submission package and local audit active; TestFlight/App Review still require G4–G5 |
 
 Status values: `pending`, `in-progress`, `blocked`, `done`.
 
@@ -638,7 +638,14 @@ Status values: `pending`, `in-progress`, `blocked`, `done`.
 
 Current state: P0 is complete at clean commit `2bad989`; P1 is complete at atomic commit `7a1842b`; P2 is complete at atomic commit `5d5cf0b`; and P3 implementation, release-candidate QA, and concrete release-defect fixes are complete at candidate implementation commit `e01074e168a26e7c0443658a778e4182d968c02c`.
 
-Next step: P4 may begin only when Adrian wants to prepare the exact committed candidate for TestFlight. Obtain G4 from the uploaded build's physical-device new-user, legacy-user, purchase, and restore smoke tests, then obtain explicit G5 authorization before pushing, submitting, or releasing. No P4 archive, upload, submission, or release action was performed during P3.
+P4 opened on 2026-07-20 at Adrian's request. The submission package and live
+verification record are in `docs/p4-submission.md`. Confirm the next unused
+marketing version and highest uploaded build in App Store Connect before
+archiving the exact committed candidate. Obtain G4 from that uploaded build's
+physical-device new-user, legacy-user, purchase, restore, and critical-path
+smoke tests, then obtain explicit G5 authorization before pushing, submitting,
+or releasing. No P4 archive, upload, submission, or release action was
+performed during P3.
 
 P3 implementation state (2026-07-19): release-only builds no longer compile UI-test launch arguments or deterministic fixture seeding, and `Five67.storekit` is excluded from the production app bundle while remaining attached to the Xcode StoreKit scheme. Forced UI-test access no longer starts live StoreKit observation, preventing Apple account UI from contaminating deterministic accessibility evidence. The global Add action now uses one durable router event: it selects Feed before emitting a fresh request token, eliminating the intermittent lost-dialog race while keeping every Add entry point on the same implementation path.
 
