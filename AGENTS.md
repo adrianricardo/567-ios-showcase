@@ -11,11 +11,9 @@ in this repo. It lives canonically in the `567-platform` monorepo at `567-platfo
 and is exposed here through a gitignored symlink `brain -> ../567-platform/brain`. Read
 `brain/ARCHITECTURE.md` then `brain/README.md` before product/strategy work.
 
-**Since 2026-07-09 the brain is split** (see `brain/README.md`): the strategy half lives in
-the "567 Brain" Hubble cloud workspace, projected at `brain/cloud/` (a git-excluded Hubble
-mount inside `567-platform`); the engineering/build half stays in git. The symlink above
-resolves both halves. If `brain/cloud/` is empty on this machine, set up the Hubble mount
-in `567-platform` (desktop app repo-link, or CLI folder export).
+The entire product brain is Git-tracked in `567-platform/brain`; no Hubble mount is required.
+Strategy and engineering documents share the top-level `brain/synthesized/`, `brain/sources/`,
+`brain/admin/`, and `brain/office-hours/` directories.
 
 If `brain/` is missing (fresh clone), clone `567-platform` as a sibling of this repo and run
 `ln -s ../567-platform/brain brain`. iOS-specific implementation notes (Tier-3) live here under

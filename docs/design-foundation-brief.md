@@ -12,8 +12,8 @@ Turn the chosen Warm Stage taste direction into a coherent, evidence-informed in
 
 1. `AGENTS.md`
 2. `brain/ARCHITECTURE.md` and `brain/README.md`
-3. `brain/cloud/synthesized/active-principles.md`
-4. `brain/cloud/synthesized/onboarding-strategy.md`
+3. `brain/synthesized/active-principles.md`
+4. `brain/synthesized/onboarding-strategy.md`
 5. `docs/brand.md`
 6. `docs/design-system.md`
 7. The current SwiftUI implementation and simulator UI
