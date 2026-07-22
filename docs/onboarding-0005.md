@@ -2,6 +2,13 @@
 
 Companion to `specs/0005-freemium-unlock-smart-import.md`. Holds the screen-level blueprint, draft copy, and the Codex second-opinion critique. Generated 2026-07-07 via `/app-onboarding-questionnaire` + a Codex adversarial review.
 
+> **SUPERSEDED (2026-07-21) by `specs/0007-onboarding-core-ui-redesign.plan.md`.**
+> The 12-beat blueprint below, the multi-select styles/volume questions, and the
+> **10-video** free cap are all replaced by 0007's approved sequence and its
+> **3 personal videos** cap. Kept for the copy drafts and the Codex critique
+> (§C) only — do not implement from this document. 0007's own copy is
+> authoritative where the two disagree.
+
 **Status: DRAFT.** Copy is first-pass. Codex flagged serious strategic risks (§C below) — several conflict with decisions Adrian locked 2026-07-07 and need a conscious accept/override before build.
 
 ---
