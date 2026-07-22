@@ -1,53 +1,42 @@
-import Photos
 import PhotosUI
 import SwiftData
 import SwiftUI
 
 struct OnboardingFlow: View {
-    let onComplete: (UUID?) -> Void
+    /// Reports the onboarding result so the caller can land the Feed on it.
+    /// Nil when the flow completed without a seed video (test fixtures only).
+    let onComplete: (FeedSelection?) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.modelContext) private var modelContext
     @Environment(StyleStore.self) private var styleStore
     @Environment(UnlockStore.self) private var unlockStore
     @Query(sort: \Video.importedAt, order: .reverse) private var allVideos: [Video]
+    @Query(sort: \Style.createdAt, order: .forward) private var allStyles: [Style]
 
     @State private var beat: Beat = .hook
-    @State private var selectedValueProps: Set<String> = []
-    @State private var painCardIndex = 0
-    @State private var selectedStyles: Set<String> = []
-    @State private var selectedVolume: String?
+    @State private var motivation: OnboardingMotivation?
     @State private var showSeedPicker = false
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var isImportingSeed = false
     @State private var importError: String?
-    @State private var photosStatus: PHAuthorizationStatus?
-    @State private var importedVideo: Video?
+    @State private var seedVideo: Video?
+    @State private var showStyleTagSheet = false
     @State private var navigationDirection: NavigationDirection = .forward
 
     private let preferences = OnboardingPreferences()
 
     var body: some View {
         Group {
-            if beat == .editor, let importedVideo {
-                editorBeat(video: importedVideo)
+            if beat == .editor, let seedVideo {
+                editorBeat(video: seedVideo)
             } else {
                 onboardingScaffold {
                     beatContent
                 }
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: Spacing.none) {
-            if beat == .styles {
-                styleContinueBar
-                    .transition(
-                        reduceMotion
-                            ? .opacity
-                            : .move(edge: .bottom).combined(with: .opacity)
-                    )
-            }
-        }
-        .background(onboardingBackground.ignoresSafeArea())
+        .background(Theme.stageBackground.ignoresSafeArea())
         .foregroundStyle(Theme.stagePrimary)
         .preferredColorScheme(.dark)
         .photosPicker(
@@ -63,6 +52,16 @@ struct OnboardingFlow: View {
             pickerItems = []
             Task { await importSeedVideo(item) }
         }
+        // The canonical post-import style sheet (P3). Personal seeds are tagged
+        // here; demo content arrives pre-styled and never opens this.
+        .sheet(isPresented: $showStyleTagSheet, onDismiss: openEditor) {
+            StyleSelectionSheet(
+                context: .tagImport(count: 1),
+                styles: allStyles,
+                selectedStyleID: seedVideo?.style?.id,
+                onSelect: applySeedStyle
+            )
+        }
         .alert("Import Error", isPresented: Binding(
             get: { importError != nil },
             set: { if !$0 { importError = nil } }
@@ -77,25 +76,17 @@ struct OnboardingFlow: View {
                 beat = .paywall
             }
 #endif
-            // Onboarding answers are session-only by contract: they shape the
-            // narrative and are never persisted as analytics/research. A relaunch
-            // therefore restarts the narrative with empty selections — but the
-            // seed video itself survives and is reused.
+            // The motivation answer is session-only by contract, so a relaunch
+            // restarts the narrative at Hook with it cleared — but the seed
+            // video itself survives and is reused when Seed is reached again.
             Style.seedDefaultsIfNeeded(in: modelContext)
             restorePersistedSeedIfAvailable()
         }
     }
 
-    private var onboardingBackground: Color {
-        Theme.stageBackground
-    }
-
-    private var selectedStyleName: String? {
-        styleOptions.first(where: selectedStyles.contains)
-    }
-
     private var onboardingAccent: Color {
-        selectedStyleName.flatMap { StyleAccentPalette.accent(forName: $0)?.color }
+        guard let style = seedVideo?.style else { return Theme.stagePrimary }
+        return StyleAccentPalette.accent(forName: style.name, id: style.id)?.color
             ?? Theme.stagePrimary
     }
 
@@ -113,28 +104,13 @@ struct OnboardingFlow: View {
     @ViewBuilder
     private var beatContent: some View {
         switch beat {
-        case .hook:
-            hookBeat
-        case .valueSurvey:
-            valueSurveyBeat
-        case .pain:
-            painBeat
-        case .styles:
-            stylesBeat
-        case .volume:
-            volumeBeat
-        case .payoff:
-            payoffBeat
-        case .permission:
-            permissionBeat
-        case .seedImport:
-            seedImportBeat
-        case .editor:
-            EmptyView()
-        case .processing:
-            processingBeat
-        case .paywall:
-            paywallBeat
+        case .hook:       hookBeat
+        case .motivation: motivationBeat
+        case .payoff:     payoffBeat
+        case .seed:       seedBeat
+        case .editor:     EmptyView()
+        case .result:     resultBeat
+        case .paywall:    paywallBeat
         }
     }
 
@@ -176,32 +152,36 @@ struct OnboardingFlow: View {
                 Spacer()
             }
 
-            OnboardingProgressDots(currentIndex: beat.progressIndex, accent: onboardingAccent)
+            OnboardingProgressDots(progress: beat.progress, accent: onboardingAccent)
         }
         .padding(.horizontal, Spacing.md)
         .padding(.top, Spacing.sm)
         .padding(.bottom, Spacing.md)
         .foregroundStyle(Theme.stagePrimary)
-        .background(onboardingBackground.opacity(0.96))
+        .background(Theme.stageBackground.opacity(0.96))
     }
 
+    /// Back is offered on every reversible state. The paywall is the one
+    /// irreversible exit — leaving it *is* completion.
     private var canGoBack: Bool {
-        beat.rawValue > Beat.hook.rawValue && beat.rawValue <= Beat.payoff.rawValue
+        beat != .hook && beat != .paywall
     }
+
+    // MARK: - Beats
 
     private var hookBeat: some View {
         VStack(spacing: Spacing.xl4) {
-            OnboardingBrandHero(reduceMotion: reduceMotion)
+            OnboardingProductPreview(reduceMotion: reduceMotion)
                 .frame(maxWidth: .infinity)
-                .frame(height: 320)
+                .frame(height: 380)
 
             VStack(spacing: Spacing.md) {
-                Text("Your class videos finally have a home.")
+                Text("Never forget a turn or combo again.")
                     .font(.largeTitle.weight(.heavy))
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("Turn the dance clips buried in your camera roll into a move library you'll actually practice.")
+                Text("Turn class videos into named moves you can find, loop, and practice.")
                     .font(.body)
                     .foregroundStyle(Theme.stageSecondary)
                     .multilineTextAlignment(.center)
@@ -212,196 +192,69 @@ struct OnboardingFlow: View {
         }
     }
 
-    private var valueSurveyBeat: some View {
-        optionBeat(
-            title: "What do you want 567 for?",
-            subtitle: nil,
-            options: valuePropOptions,
-            selected: selectedValueProps,
-            continueTitle: "Continue",
-            toggle: toggleValueProp,
-            continueAction: {
-                goNext()
-            }
-        )
-    }
+    private var motivationBeat: some View {
+        VStack(alignment: .leading, spacing: Spacing.xl4) {
+            Text("What do you want 567 for?")
+                .font(.largeTitle.weight(.heavy))
+                .fixedSize(horizontal: false, vertical: true)
 
-    private var painBeat: some View {
-        VStack(alignment: .leading, spacing: Spacing.xl3) {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text("Sound familiar?")
-                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                    .tracking(-0.8)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text("\(painCardIndex + 1) of 2")
-                    .font(.body)
-                    .foregroundStyle(Theme.stageSecondary)
-                    .accessibilityLabel("Pain card \(painCardIndex + 1) of 2")
-            }
-
-            painCard(
-                number: painCardIndex == 0 ? "01" : "02",
-                title: painCardIndex == 0
-                    ? "You record every class… and never watch them again."
-                    : "A week later the move's gone — and the video's lost in 2,000 camera-roll clips."
-            )
-            .id(painCardIndex)
-            .transition(reduceMotion ? .identity : .opacity.combined(with: .move(edge: .trailing)))
-
-            primaryButton(painCardIndex == 0 ? "Keep going" : "That's me") {
-                if painCardIndex == 0 {
-                    withAnimation(reduceMotion ? nil : .smooth(duration: 0.24)) {
-                        painCardIndex = 1
-                    }
-                } else {
-                    goNext()
-                }
-            }
-        }
-    }
-
-    private func painCard(number: String, title: String) -> some View {
-        HStack(alignment: .top, spacing: Spacing.md) {
-            Text(number)
-                .font(.caption.monospacedDigit().weight(.bold))
-                .foregroundStyle(Theme.stageSecondary)
-                .frame(width: 30, alignment: .leading)
-
-            VStack(alignment: .leading, spacing: Spacing.xsPlus) {
-                Text(title)
-                    .font(.headline.weight(.bold))
-            }
-        }
-        .padding(Spacing.lg)
-        .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
-        .background(Theme.stageSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Theme.stageStroke, lineWidth: 1)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    private var stylesBeat: some View {
-        VStack(alignment: .leading, spacing: Spacing.xl3) {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text("What do you dance most?")
-                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                    .tracking(-0.8)
-                    .foregroundStyle(Theme.stagePrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text("Choose where you want your library to start. You can change this later.")
-                    .font(.body)
-                    .foregroundStyle(Theme.stageSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            VStack(spacing: Spacing.smPlus) {
-                ForEach(styleOptions, id: \.self) { style in
+            VStack(spacing: Spacing.md) {
+                ForEach(OnboardingMotivation.allCases) { option in
                     StageSelectableRow(
-                        title: style == "Other" ? "Something else" : style,
-                        identityColor: StyleAccentPalette.accent(forName: style)?.color,
-                        isSelected: selectedStyles.contains(style)
+                        title: option.label,
+                        isSelected: motivation == option
                     ) {
-                        toggleStyle(style)
+                        motivation = option
+                        Haptics.select()
                     }
                 }
             }
+
+            primaryButton("Continue") { goNext() }
+                .disabled(motivation == nil)
         }
-    }
-
-    private var styleContinueBar: some View {
-        VStack(spacing: Spacing.none) {
-            Button {
-                activateSelectedStyle()
-                goNext()
-            } label: {
-                HStack(spacing: Spacing.md) {
-                    Text("Continue")
-
-                    Spacer()
-
-                    Image(systemName: "arrow.right")
-                        .font(.headline.weight(.black))
-                }
-            }
-            .buttonStyle(StagePrimaryActionButtonStyle())
-            .accessibilityHint("Continues to the next onboarding step")
-            .padding(.horizontal, Spacing.xl)
-            .padding(.vertical, Spacing.md)
-        }
-        .background(Theme.stageBackground.opacity(0.96))
-    }
-
-    private var volumeBeat: some View {
-        optionBeat(
-            title: "How many class videos are sitting in your camera roll right now?",
-            subtitle: nil,
-            options: volumeOptions,
-            selected: Set(selectedVolume.map { [$0] } ?? []),
-            continueTitle: "Continue",
-            toggle: { selectedVolume = $0 },
-            continueAction: {
-                goNext()
-            }
-        )
     }
 
     private var payoffBeat: some View {
         VStack(spacing: Spacing.xl4) {
-            OnboardingPayoffArtwork(reduceMotion: reduceMotion)
-                .frame(height: 320)
+            OnboardingProductPreview(reduceMotion: reduceMotion, showsUnnamedRow: true)
+                .frame(maxWidth: .infinity)
+                .frame(height: 380)
 
             VStack(spacing: Spacing.md) {
-                Text("This is what they become.")
+                Text(motivation?.payoffHeadline ?? "Give every class video a home.")
                     .font(.largeTitle.weight(.heavy))
                     .multilineTextAlignment(.center)
-                Text("Clipped. Named. Looping. Ready to practice in seconds.")
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(motivation?.payoffSupportingCopy
+                     ?? OnboardingMotivation.organize.payoffSupportingCopy)
                     .font(.body)
                     .foregroundStyle(Theme.stageSecondary)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             primaryButton("Show me how") { goNext() }
         }
     }
 
-    private var permissionBeat: some View {
-        VStack(alignment: .leading, spacing: Spacing.xl4) {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                Text("Let's find your class videos.")
-                    .font(.largeTitle.weight(.heavy))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    BulletLine("Pulls your dance clips straight from Photos — no hunting")
-                    BulletLine("Everything stays on your device. Private by design.")
-                    BulletLine("We only touch the videos you choose to save")
-                }
-                .foregroundStyle(Theme.stageSecondary)
-                .padding(.top, Spacing.sm)
-
-                if photosStatus == .limited {
-                    Text("Limited access is okay here. You can still pick a class video manually.")
-                        .font(.footnote)
-                        .foregroundStyle(Theme.stageSecondary)
-                        .padding(.top, Spacing.sm)
-                }
-            }
-
-            primaryButton("Connect my videos") {
-                Task { await requestPhotoAccess() }
-            }
+    /// Seed selection. A restored seed is reused rather than re-imported, so an
+    /// interrupted onboarding never duplicates content.
+    @ViewBuilder
+    private var seedBeat: some View {
+        if let seedVideo {
+            restoredSeedBeat(video: seedVideo)
+        } else {
+            newSeedBeat
         }
     }
 
-    private var seedImportBeat: some View {
+    private var newSeedBeat: some View {
         VStack(spacing: Spacing.xl4) {
             Image(systemName: "film.stack")
                 .font(.system(size: 72, weight: .light))
-                .foregroundStyle(onboardingAccent)
+                .foregroundStyle(Theme.stagePrimary)
                 .frame(height: 110)
                 .accessibilityHidden(true)
 
@@ -410,113 +263,99 @@ struct OnboardingFlow: View {
                     .font(.largeTitle.weight(.heavy))
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Start with one — we'll turn it into your first moves.")
+                Text("Start with one — we'll turn it into your first move.")
                     .font(.body)
                     .foregroundStyle(Theme.stageSecondary)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
-            if photosStatus == .denied || photosStatus == .restricted {
-                Text("You can still choose a video with Apple's private picker. 567 only receives the video you select.")
-                    .font(.footnote)
-                    .foregroundStyle(Theme.stageSecondary)
-                    .multilineTextAlignment(.center)
-            }
+            VStack(spacing: Spacing.md) {
+                primaryButton(isImportingSeed ? "Saving…" : "Choose video") {
+                    showSeedPicker = true
+                }
+                .disabled(isImportingSeed)
 
-            primaryButton(isImportingSeed ? "Saving..." : "Choose video") {
-                showSeedPicker = true
+                secondaryButton("I don't have one—try a demo") {
+                    Task { await ingestDemoSeed() }
+                }
+                .disabled(isImportingSeed)
             }
-            .disabled(isImportingSeed)
         }
     }
 
-    private var processingBeat: some View {
+    private func restoredSeedBeat(video: Video) -> some View {
         VStack(spacing: Spacing.xl4) {
-            ProcessingMark(reduceMotion: reduceMotion)
-                .frame(width: 120, height: 120)
-                .padding(.top, Spacing.xl5)
+            StageThumbnailView(
+                videoID: video.id,
+                fileURL: video.fileURL,
+                size: CGSize(width: 220, height: 160),
+                accent: onboardingAccent
+            )
 
-            Text("Building your library…")
-                .font(.largeTitle.weight(.heavy))
-                .multilineTextAlignment(.center)
-        }
-        .task {
-            let delay: UInt64 = reduceMotion ? 1_000_000_000 : 1_800_000_000
-            try? await Task.sleep(nanoseconds: delay)
-            await MainActor.run {
-                if beat == .processing {
-                    beat = .paywall
-                }
+            VStack(spacing: Spacing.md) {
+                Text("Your video's still here.")
+                    .font(.largeTitle.weight(.heavy))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Pick up where you left off with \(video.displayName).")
+                    .font(.body)
+                    .foregroundStyle(Theme.stageSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+
+            VStack(spacing: Spacing.md) {
+                primaryButton("Continue") { openEditor() }
+
+                secondaryButton("Choose a different video") {
+                    showSeedPicker = true
+                }
+                .disabled(isImportingSeed)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var resultBeat: some View {
+        if let seedVideo, let move = resultMove(in: seedVideo) {
+            OnboardingResultReveal(
+                video: seedVideo,
+                move: move,
+                accent: onboardingAccent
+            )
+
+            primaryButton("Continue") { goNext() }
+        } else {
+            // Unreachable in the normal flow — both editor exits guarantee a
+            // move — but a missing seed must never strand the user.
+            primaryButton("Continue") { goNext() }
         }
     }
 
     private var paywallBeat: some View {
         UnlockPaywallView(
             reason: .onboarding,
-            secondaryTitle: "Maybe later",
+            secondaryTitle: "Not now",
             onUnlocked: { complete() },
             onSecondary: { complete() }
         )
     }
 
     private func editorBeat(video: Video) -> some View {
-        ZStack(alignment: .bottom) {
-            VideoDetailView(
-                video: video,
-                finishTitle: "Done",
-                showsTitle: false,
-                onFinish: { _ in
-                    beat = .processing
-                }
-            )
-
-            OnboardingProgressDots(currentIndex: beat.progressIndex, accent: onboardingAccent)
-                .padding(.horizontal, Spacing.lg)
-                .padding(.vertical, Spacing.sm)
-                .liquidGlass(in: Capsule())
-                .padding(.bottom, Spacing.md)
-                .allowsHitTesting(false)
-        }
+        VideoDetailView(
+            video: video,
+            finishTitle: "Continue",
+            secondaryFinishTitle: "I'll do this later",
+            showsTitle: false,
+            progress: Beat.editor.progress,
+            onSecondaryFinish: { finishEditor() },
+            onFinish: { _ in finishEditor() }
+        )
         .ignoresSafeArea(edges: .bottom)
     }
 
-    private func optionBeat(
-        title: String,
-        subtitle: String?,
-        options: [String],
-        selected: Set<String>,
-        continueTitle: String,
-        toggle: @escaping (String) -> Void,
-        continueAction: @escaping () -> Void
-    ) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.xl4) {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text(title)
-                    .font(.largeTitle.weight(.heavy))
-                    .fixedSize(horizontal: false, vertical: true)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.body)
-                        .foregroundStyle(Theme.stageSecondary)
-                }
-            }
-
-            VStack(spacing: Spacing.md) {
-                ForEach(options, id: \.self) { option in
-                    StageSelectableRow(
-                        title: option,
-                        accessibilityTitle: accessibleOptionTitle(option),
-                        isSelected: selected.contains(option),
-                    ) {
-                        toggle(option)
-                    }
-                }
-            }
-
-            primaryButton(continueTitle, action: continueAction)
-        }
-    }
+    // MARK: - Shared controls
 
     private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -532,14 +371,7 @@ struct OnboardingFlow: View {
         .buttonStyle(StageSecondaryActionButtonStyle())
     }
 
-    private func accessibleOptionTitle(_ title: String) -> String {
-        guard let firstSpace = title.firstIndex(of: " ") else { return title }
-        let prefix = title[..<firstSpace]
-        guard prefix.unicodeScalars.contains(where: { $0.properties.isEmojiPresentation }) else {
-            return title
-        }
-        return String(title[title.index(after: firstSpace)...])
-    }
+    // MARK: - Navigation
 
     private func goNext() {
         if let next = Beat(rawValue: beat.rawValue + 1) {
@@ -565,65 +397,30 @@ struct OnboardingFlow: View {
         reduceMotion ? .easeOut(duration: 0.12) : .smooth(duration: 0.32)
     }
 
+    private func openEditor() {
+        guard seedVideo != nil else { return }
+        navigationDirection = .forward
+        withAnimation(beatAnimation) {
+            beat = .editor
+        }
+    }
+
+    /// The single exit from the guided editor, shared by "Continue" and
+    /// "I'll do this later". Both guarantee the reveal has a real move to loop.
+    private func finishEditor() {
+        ensureSeedMoveExists()
+        navigationDirection = .forward
+        withAnimation(beatAnimation) {
+            beat = .result
+        }
+    }
+
     private func complete() {
-        activateSelectedStyle()
         preferences.markCompleted()
-        onComplete(importedVideo?.id)
+        onComplete(resultSelection())
     }
 
-    private func toggleValueProp(_ value: String) {
-        if selectedValueProps.contains(value) {
-            selectedValueProps.remove(value)
-        } else {
-            selectedValueProps.insert(value)
-        }
-        Haptics.select()
-    }
-
-    private func toggleStyle(_ value: String) {
-        if selectedStyles.contains(value) {
-            selectedStyles.removeAll()
-        } else {
-            selectedStyles = [value]
-        }
-        Haptics.select()
-    }
-
-    /// Resolves the onboarding choice into the same persisted Style model used
-    /// by the global app filter. Non-seeded options become ordinary user
-    /// styles; choosing "Something else" leaves the app in neutral All mode.
-    @discardableResult
-    private func activateSelectedStyle() -> Style? {
-        guard let selectedStyleName, selectedStyleName != "Other" else {
-            styleStore.activeStyle = nil
-            return nil
-        }
-
-        let descriptor = FetchDescriptor<Style>()
-        let styles = (try? modelContext.fetch(descriptor)) ?? []
-        let style: Style
-        if let existing = styles.first(where: {
-            $0.name.localizedCaseInsensitiveCompare(selectedStyleName) == .orderedSame
-        }) {
-            style = existing
-        } else {
-            style = Style(name: selectedStyleName)
-            modelContext.insert(style)
-        }
-
-        styleStore.activeStyle = style
-        unlockStore.recordStyleUse(style.id)
-        try? modelContext.save()
-        return style
-    }
-
-    private func requestPhotoAccess() async {
-        let status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
-        await MainActor.run {
-            photosStatus = status
-            goNext()
-        }
-    }
+    // MARK: - Seed video
 
     private func importSeedVideo(_ item: PhotosPickerItem) async {
         isImportingSeed = true
@@ -636,15 +433,16 @@ struct OnboardingFlow: View {
         do {
             let result = try await VideoImporter.import(from: item, existingSourceIDs: existingSourceIDs)
             let video = VideoImportPersistence.insertVideo(from: result, in: modelContext)
-            video.style = styleStore.activeStyle
             try? modelContext.save()
             adoptSeed(video)
             Haptics.success()
-            beat = .editor
+            // Personal imports are tagged through the canonical style sheet,
+            // which opens the editor on dismissal.
+            showStyleTagSheet = true
         } catch ImportError.alreadyImported(let existingID) {
             if let existing = allVideos.first(where: { $0.id == existingID }) {
                 adoptSeed(existing)
-                beat = .editor
+                openEditor()
             } else {
                 importError = "This video is already in your library."
             }
@@ -653,65 +451,96 @@ struct OnboardingFlow: View {
         }
     }
 
+    /// Demo content arrives pre-styled and skips the tagging sheet. Ingestion
+    /// dedupes on the bundled source ID, so a restart never copies it twice.
+    private func ingestDemoSeed() async {
+        isImportingSeed = true
+        defer { isImportingSeed = false }
+
+        do {
+            let video = try await OnboardingDemoIngestion.ingest(in: modelContext)
+            try? modelContext.save()
+            adoptSeed(video)
+            Haptics.success()
+            openEditor()
+        } catch {
+            importError = error.localizedDescription
+        }
+    }
+
+    /// Applies the tagging sheet's choice. `recordStyleUse` is what claims the
+    /// one free style, so it only ever runs for personal content.
+    private func applySeedStyle(_ style: Style?) {
+        guard let seedVideo, !seedVideo.isDemo else { return }
+        unlockStore.recordStyleUse(style?.id)
+        seedVideo.style = style
+        styleStore.activeStyle = style
+        try? modelContext.save()
+    }
+
     /// Records the seed so an interrupted onboarding reuses it instead of
     /// importing a duplicate when it reaches Seed again.
     private func adoptSeed(_ video: Video) {
-        importedVideo = video
+        seedVideo = video
         preferences.saveSeedVideoID(video.id)
     }
 
     /// Resolves a previously persisted seed. Clears the stored ID when the row
     /// or its file has gone missing so Seed falls back to its normal actions.
     private func restorePersistedSeedIfAvailable() {
-        guard importedVideo == nil, let seedID = preferences.seedVideoID else { return }
+        guard seedVideo == nil, let seedID = preferences.seedVideoID else { return }
         guard let video = allVideos.first(where: { $0.id == seedID }),
               FileManager.default.fileExists(atPath: video.fileURL.path) else {
             preferences.clearSeedVideoID()
             return
         }
-        importedVideo = video
+        seedVideo = video
     }
 
-    private let valuePropOptions = [
-        "🧠 Remember the moves I've learned",
-        "🔁 Practice the moves I'm working on",
-        "🗂️ Keep my class videos organized",
-        "💃 Stop losing steps between classes",
-        "🎯 Actually review what I record"
-    ]
+    // MARK: - Result
 
-    private let styleOptions = [
-        "Salsa",
-        "Bachata",
-        "Cumbia",
-        "Kizomba",
-        "Zouk",
-        "Merengue",
-        "Other"
-    ]
+    /// Guarantees one unnamed full-video move when the user left the editor
+    /// without marking anything, so playback and the reveal still work. Never
+    /// adds a duplicate.
+    private func ensureSeedMoveExists() {
+        guard let seedVideo, seedVideo.moves.isEmpty else { return }
+        let duration = max(0, seedVideo.duration)
+        modelContext.insert(
+            Move(name: "", time: 0, endTime: duration, video: seedVideo)
+        )
+        try? modelContext.save()
+    }
 
-    private let volumeOptions = [
-        "A handful (1–10)",
-        "A stash (10–50)",
-        "A graveyard (50+)",
-        "I've lost count"
-    ]
+    /// The move the reveal loops and the Feed lands on: the first named move if
+    /// there is one, otherwise the first move.
+    private func resultMove(in video: Video) -> Move? {
+        let sorted = video.movesSorted
+        return sorted.first { !$0.name.isEmpty } ?? sorted.first
+    }
+
+    private func resultSelection() -> FeedSelection? {
+        guard let seedVideo else { return nil }
+        return FeedSelection(
+            videoID: seedVideo.id,
+            moveID: resultMove(in: seedVideo)?.id
+        )
+    }
 }
 
+/// The approved sequence. Progress stays in one top position across all of it,
+/// including the guided editor.
 private enum Beat: Int, CaseIterable {
     case hook
-    case valueSurvey
-    case pain
-    case styles
-    case volume
+    case motivation
     case payoff
-    case permission
-    case seedImport
+    case seed
     case editor
-    case processing
+    case result
     case paywall
 
-    var progressIndex: Int { rawValue }
+    var progress: OnboardingProgress {
+        OnboardingProgress(index: rawValue, total: Beat.allCases.count)
+    }
 }
 
 private enum NavigationDirection {
@@ -719,20 +548,56 @@ private enum NavigationDirection {
     case backward
 }
 
-private struct OnboardingProgressDots: View {
-    let currentIndex: Int
+/// The real persisted move, looping on the real playback controller. Replaces
+/// the former fake "Building your library…" processing beat.
+private struct OnboardingResultReveal: View {
+    let video: Video
+    let move: Move
     let accent: Color
 
+    @State private var controller: PlaybackController
+
+    init(video: Video, move: Move, accent: Color) {
+        self.video = video
+        self.move = move
+        self.accent = accent
+        self._controller = State(wrappedValue: PlaybackController(videoURL: video.fileURL))
+    }
+
+    private var moveName: String {
+        move.name.isEmpty ? "Unnamed move" : move.name
+    }
+
     var body: some View {
-        HStack(spacing: Spacing.xs) {
-            ForEach(0..<Beat.allCases.count, id: \.self) { index in
-                Capsule()
-                    .fill(index <= currentIndex ? accent : Theme.stageSecondary.opacity(0.25))
-                    .frame(width: index == currentIndex ? 18 : 6, height: 6)
+        VStack(spacing: Spacing.xl3) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.black)
+                VideoPlayerSurface(controller: controller)
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            }
+            .frame(height: 320)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(moveName), looping")
+
+            VStack(spacing: Spacing.md) {
+                Text("Your first move is ready.")
+                    .font(.largeTitle.weight(.heavy))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Label(moveName, systemImage: "repeat")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(accent)
             }
         }
-        .accessibilityLabel("Onboarding progress")
-        .accessibilityValue("\(currentIndex + 1) of \(Beat.allCases.count)")
+        .onAppear {
+            controller.isLooping = true
+            controller.playRange(start: move.time, end: move.endTime)
+        }
+        .onDisappear {
+            controller.pause()
+        }
     }
 }
 
@@ -750,31 +615,5 @@ struct BulletLine: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .font(.body)
-    }
-}
-
-private struct ProcessingMark: View {
-    let reduceMotion: Bool
-    @State private var rotation: Double = 0
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(Theme.stageRaisedSurface, lineWidth: 12)
-            Circle()
-                .trim(from: 0.1, to: 0.72)
-                .stroke(StyleAccentPalette.salsa.color, style: StrokeStyle(lineWidth: 12, lineCap: .round))
-                .rotationEffect(.degrees(rotation))
-            Image(systemName: "sparkles")
-                .font(.title.weight(.semibold))
-                .foregroundStyle(Theme.stagePrimary)
-        }
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.linear(duration: 1.1).repeatForever(autoreverses: false)) {
-                rotation = 360
-            }
-        }
-        .accessibilityHidden(true)
     }
 }

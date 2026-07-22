@@ -26,29 +26,31 @@ final class TabBarVerifyTests: XCTestCase {
         }
     }
 
-    func testOnboardingCompletionLandsInLibrary() throws {
+    func testOnboardingCompletionLandsInFeed() throws {
         continueAfterFailure = false
         app = XCUIApplication()
         app.launchArguments.append("-Five67UITestOnboardingCompletionFixture")
         app.launchArguments.append("-Five67UITestFreeAccess")
         app.launch()
 
-        let maybeLater = app.buttons["Maybe later"]
-        XCTAssertTrue(maybeLater.waitForExistence(timeout: 8))
-        maybeLater.tap()
+        let notNow = app.buttons["Not now"]
+        XCTAssertTrue(notNow.waitForExistence(timeout: 8))
+        notNow.tap()
 
         let tabBar = app.tabBars.firstMatch
-        XCTAssertTrue(tabBar.buttons["Library"].waitForExistence(timeout: 5))
-        XCTAssertTrue(tabBar.buttons["Library"].isSelected)
-        XCTAssertTrue(app.staticTexts["Library"].exists)
+        XCTAssertTrue(tabBar.buttons["Feed"].waitForExistence(timeout: 5))
+        XCTAssertTrue(tabBar.buttons["Feed"].isSelected)
 
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        attachment.name = "final-onboarding-library-arrival"
+        attachment.name = "final-onboarding-feed-arrival"
         attachment.lifetime = .keepAlways
         add(attachment)
     }
 
-    func testWarmStageOnboardingThroughPermissionPrimer() throws {
+    /// Walks the approved sequence to the seed step. The seed step must offer
+    /// Apple's private picker and the demo escape hatch — and must never show a
+    /// Photo Library permission primer or prompt.
+    func testOnboardingReachesSeedWithoutAPhotoPermissionPrompt() throws {
         continueAfterFailure = false
         app = XCUIApplication()
         app.launchArguments.append("-Five67UITestReviewOnboarding")
@@ -58,48 +60,60 @@ final class TabBarVerifyTests: XCTestCase {
         let getStarted = app.buttons["Get started"]
         XCTAssertTrue(getStarted.waitForExistence(timeout: 8))
         XCTAssertGreaterThanOrEqual(getStarted.frame.height, 44)
-        addScreenshot(named: "p1-onboarding-hook")
+        XCTAssertTrue(app.staticTexts["Never forget a turn or combo again."].exists)
+        addScreenshot(named: "p4-onboarding-hook")
         getStarted.tap()
 
         XCTAssertTrue(app.staticTexts["What do you want 567 for?"].waitForExistence(timeout: 3))
-        let valueChoice = app.buttons.matching(
-            NSPredicate(format: "%K CONTAINS %@", "label", "Remember the moves I've learned")
-        ).firstMatch
-        XCTAssertTrue(valueChoice.exists)
-        valueChoice.tap()
-        XCTAssertTrue(waitForSelected(valueChoice))
+        let motivation = app.buttons["Practice what I learned between classes"]
+        XCTAssertTrue(motivation.exists)
+        motivation.tap()
+        XCTAssertTrue(waitForSelected(motivation))
         app.buttons["Continue"].tap()
 
-        XCTAssertTrue(app.staticTexts["Sound familiar?"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["You record every class… and never watch them again."].exists)
-        addScreenshot(named: "p1-onboarding-pain")
-        app.buttons["Keep going"].tap()
-        XCTAssertTrue(app.staticTexts[
-            "A week later the move's gone — and the video's lost in 2,000 camera-roll clips."
-        ].waitForExistence(timeout: 3))
-        app.buttons["That's me"].tap()
-
-        XCTAssertTrue(app.staticTexts["What do you dance most?"].waitForExistence(timeout: 3))
-        let salsa = app.buttons["Salsa"]
-        XCTAssertTrue(salsa.exists)
-        salsa.tap()
-        XCTAssertTrue(waitForSelected(salsa))
-        app.buttons["Continue"].tap()
-
-        XCTAssertTrue(app.staticTexts[
-            "How many class videos are sitting in your camera roll right now?"
-        ].waitForExistence(timeout: 3))
-        let volume = app.buttons["A handful (1–10)"]
-        volume.tap()
-        XCTAssertTrue(waitForSelected(volume))
-        app.buttons["Continue"].tap()
-
-        XCTAssertTrue(app.staticTexts["This is what they become."].waitForExistence(timeout: 3))
-        addScreenshot(named: "p1-onboarding-payoff")
+        // The payoff headline is tailored to the answer above.
+        XCTAssertTrue(app.staticTexts["Loop the exact part until it sticks."].waitForExistence(timeout: 3))
+        addScreenshot(named: "p4-onboarding-payoff")
         app.buttons["Show me how"].tap()
 
-        XCTAssertTrue(app.staticTexts["Let's find your class videos."].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["Connect my videos"].exists)
+        XCTAssertTrue(app.staticTexts["Pick a video from your recent classes."].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Choose video"].exists)
+        XCTAssertTrue(app.buttons["I don't have one—try a demo"].exists)
+        addScreenshot(named: "p4-onboarding-seed")
+
+        // No permission primer survives, and nothing has triggered the system
+        // Photo Library alert on the way here.
+        XCTAssertFalse(app.buttons["Connect my videos"].exists)
+        XCTAssertFalse(
+            app.alerts.element.waitForExistence(timeout: 2),
+            "Onboarding must not request Photo Library authorization."
+        )
+    }
+
+    /// Back must stay available on every reversible onboarding state.
+    func testOnboardingSeedStepCanNavigateBack() throws {
+        continueAfterFailure = false
+        app = XCUIApplication()
+        app.launchArguments.append("-Five67UITestReviewOnboarding")
+        app.launchArguments.append("-Five67UITestFreeAccess")
+        app.launch()
+
+        XCTAssertTrue(app.buttons["Get started"].waitForExistence(timeout: 8))
+        app.buttons["Get started"].tap()
+
+        let motivation = app.buttons["Organize my class videos"]
+        XCTAssertTrue(motivation.waitForExistence(timeout: 3))
+        motivation.tap()
+        app.buttons["Continue"].tap()
+
+        XCTAssertTrue(app.staticTexts["Give every class video a home."].waitForExistence(timeout: 3))
+        app.buttons["Show me how"].tap()
+        XCTAssertTrue(app.staticTexts["Pick a video from your recent classes."].waitForExistence(timeout: 3))
+
+        app.buttons["Back"].tap()
+        XCTAssertTrue(app.staticTexts["Give every class video a home."].waitForExistence(timeout: 3))
+        app.buttons["Back"].tap()
+        XCTAssertTrue(app.staticTexts["What do you want 567 for?"].waitForExistence(timeout: 3))
     }
 
     func testWarmStageHookReflowsAtAccessibilityExtraExtraExtraLarge() throws {
@@ -113,7 +127,7 @@ final class TabBarVerifyTests: XCTestCase {
         ]
         app.launch()
 
-        XCTAssertTrue(app.staticTexts["Your class videos finally have a home."].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["Never forget a turn or combo again."].waitForExistence(timeout: 8))
         let getStarted = app.buttons["Get started"]
         if !getStarted.isHittable {
             app.swipeUp()

@@ -89,6 +89,26 @@ struct OnboardingTests {
         #expect(preferences.status == .inProgress)
     }
 
+    @Test func each_motivation_maps_to_its_approved_payoff_copy() {
+        #expect(OnboardingMotivation.remember.label == "Remember moves when I'm out dancing")
+        #expect(OnboardingMotivation.practice.label == "Practice what I learned between classes")
+        #expect(OnboardingMotivation.organize.label == "Organize my class videos")
+
+        #expect(OnboardingMotivation.remember.payoffHeadline
+                == "See every move you've learned in one place.")
+        #expect(OnboardingMotivation.practice.payoffHeadline
+                == "Loop the exact part until it sticks.")
+        #expect(OnboardingMotivation.organize.payoffHeadline
+                == "Give every class video a home.")
+        #expect(OnboardingMotivation.organize.payoffSupportingCopy
+                == "Keep them organized by style instead of buried in Photos.")
+
+        // Every answer must lead somewhere distinct — a duplicated payoff would
+        // make the question decorative.
+        let headlines = Set(OnboardingMotivation.allCases.map(\.payoffHeadline))
+        #expect(headlines.count == OnboardingMotivation.allCases.count)
+    }
+
     @Test func known_dance_styles_have_locked_brand_accents() {
         #expect(StyleAccentPalette.accent(forName: "Salsa")?.rgb == 0xFF6B4A)
         #expect(StyleAccentPalette.accent(forName: "Cumbia")?.rgb == 0xFFD166)
@@ -120,14 +140,25 @@ struct OnboardingTests {
 }
 
 struct LibraryPresentationTests {
-    @Test @MainActor func onboarding_arrival_targets_library_and_preserves_the_imported_result() {
+    @Test @MainActor func onboarding_completion_lands_the_feed_on_its_result() {
         let router = AppRouter()
-        let videoID = UUID()
+        router.selectedTab = .library
+        let result = FeedSelection(videoID: UUID(), moveID: UUID())
 
-        router.showLibraryAfterOnboarding(importedVideoID: videoID)
+        router.showFeedAfterOnboarding(result)
 
-        #expect(router.selectedTab == .library)
-        #expect(router.pendingLibraryArrival == LibraryArrival(videoID: videoID))
+        #expect(router.selectedTab == .feed)
+        #expect(router.pendingFeedSelection == result)
+        #expect(router.feedFocusRequestID != nil)
+    }
+
+    @Test @MainActor func onboarding_completion_without_a_result_still_lands_on_the_feed() {
+        let router = AppRouter()
+        router.selectedTab = .library
+
+        router.showFeedAfterOnboarding(nil)
+
+        #expect(router.selectedTab == .feed)
         #expect(router.pendingFeedSelection == nil)
     }
 

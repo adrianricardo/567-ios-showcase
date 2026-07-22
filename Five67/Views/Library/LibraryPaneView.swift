@@ -166,10 +166,6 @@ struct LibraryPaneView: View {
                 unlockSucceeded = true
             }
         }
-        .onAppear(perform: focusPendingArrival)
-        .onChange(of: router.pendingLibraryArrival) { _, _ in
-            focusPendingArrival()
-        }
     }
 
     private var libraryHeader: some View {
@@ -459,31 +455,6 @@ struct LibraryPaneView: View {
     }
 
     // MARK: - Move helpers
-
-    private func focusPendingArrival() {
-        guard let arrival = router.pendingLibraryArrival else { return }
-        router.pendingLibraryArrival = nil
-
-        Task { @MainActor in
-            await Task.yield()
-            guard let videoID = arrival.videoID else {
-                accessibilityFocus = .header
-                return
-            }
-
-            if tab == .moves,
-               let move = moveGroups
-                .flatMap(\.moves)
-                .first(where: { $0.video?.id == videoID }) {
-                accessibilityFocus = .move(move.id)
-            } else if tab == .videos,
-                      searchedVideos.contains(where: { $0.id == videoID }) {
-                accessibilityFocus = .video(videoID)
-            } else {
-                accessibilityFocus = .header
-            }
-        }
-    }
 
     private func groupTitle(for video: Video) -> String {
         let date = (video.recordedAt ?? video.importedAt).formatted(date: .long, time: .omitted)

@@ -4,12 +4,10 @@ import SwiftUI
 struct OnboardingGateView<Content: View>: View {
     @Environment(AppRouter.self) private var router
     @Environment(UnlockStore.self) private var unlockStore
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(OnboardingPreferences.Keys.status) private var statusRaw = ""
     @Query private var videos: [Video]
 
     @State private var onboardingSessionStarted = false
-    @State private var showLibraryReadyToast = false
 
     private var status: OnboardingStatus {
         OnboardingStatus(rawValue: statusRaw) ?? .notStarted
@@ -24,23 +22,12 @@ struct OnboardingGateView<Content: View>: View {
     var body: some View {
         ZStack {
             if onboardingSessionStarted && status != .completed {
-                OnboardingFlow { importedVideoID in
-                    completeOnboarding(importedVideoID: importedVideoID)
+                OnboardingFlow { result in
+                    completeOnboarding(result: result)
                 }
                 .transition(.identity)
             } else {
                 content()
-                    .overlay(alignment: .top) {
-                        if showLibraryReadyToast {
-                            LibraryReadyToast()
-                                .padding(.top, Spacing.xl2)
-                                .transition(
-                                    reduceMotion
-                                        ? .opacity
-                                        : .move(edge: .top).combined(with: .opacity)
-                                )
-                        }
-                    }
             }
         }
         .onAppear {
@@ -62,39 +49,14 @@ struct OnboardingGateView<Content: View>: View {
         }
     }
 
-    private func completeOnboarding(importedVideoID: UUID?) {
+    private func completeOnboarding(result: FeedSelection?) {
         // Establish the destination and its result before mounting RootView so
-        // onboarding never flashes the default Feed state on the way to Library.
-        router.showLibraryAfterOnboarding(importedVideoID: importedVideoID)
+        // the Feed never flashes its default state on the way to the seed video.
+        router.showFeedAfterOnboarding(result)
         // Completion is only reached from the paywall (purchase or "Not now").
         // Clears the seed ID while deliberately retaining the seed content.
         OnboardingPreferences().markCompleted()
         statusRaw = OnboardingStatus.completed.rawValue
         onboardingSessionStarted = false
-
-        withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .smooth(duration: 0.28)) {
-            showLibraryReadyToast = true
-        }
-        Task {
-            try? await Task.sleep(nanoseconds: 2_600_000_000)
-            await MainActor.run {
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
-                    showLibraryReadyToast = false
-                }
-            }
-        }
-    }
-}
-
-private struct LibraryReadyToast: View {
-    var body: some View {
-        Label("Your library's ready.", systemImage: "checkmark.circle.fill")
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.primary)
-            .padding(.horizontal, Spacing.lg)
-            .frame(height: Spacing.touchTarget)
-            .liquidGlass(in: Capsule(), interactive: false)
-            .shadow(color: .black.opacity(0.28), radius: 16, y: 8)
-            .accessibilityIdentifier("library-ready-toast")
     }
 }

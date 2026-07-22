@@ -6,10 +6,6 @@ struct FeedSelection: Equatable {
     let moveID: UUID?
 }
 
-struct LibraryArrival: Equatable {
-    let videoID: UUID?
-}
-
 enum AppTab: Hashable {
     case feed
     case library
@@ -26,9 +22,6 @@ enum AppTab: Hashable {
     var selectedTab: AppTab = .feed
     /// Set by Library when a video/move is tapped; consumed + cleared by the Feed.
     var pendingFeedSelection: FeedSelection?
-    /// Set when onboarding resolves into Library; consumed after Library places
-    /// accessibility focus on the newly created result (or its header fallback).
-    var pendingLibraryArrival: LibraryArrival?
     /// Changes whenever a Library selection should receive focus after routing
     /// to Feed. The selected object still travels through `pendingFeedSelection`.
     var feedFocusRequestID: UUID?
@@ -42,9 +35,14 @@ enum AppTab: Hashable {
     /// The Feed's currently active move — used by Library to highlight now-playing.
     var currentFeedMoveID: UUID?
 
-    func showLibraryAfterOnboarding(importedVideoID: UUID?) {
-        selectedTab = .library
-        pendingLibraryArrival = LibraryArrival(videoID: importedVideoID)
+    /// Onboarding's single completion route. Lands on the Feed with the seed
+    /// result selected and looping, through the same path Library selection uses.
+    func showFeedAfterOnboarding(_ selection: FeedSelection?) {
+        guard let selection else {
+            selectedTab = .feed
+            return
+        }
+        showInFeed(selection)
     }
 
     func showInFeed(_ selection: FeedSelection) {

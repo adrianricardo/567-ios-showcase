@@ -18,124 +18,131 @@ struct Five67BrandMark: View {
     }
 }
 
-struct OnboardingBrandHero: View {
+/// Live product composition shown on the Hook and Payoff beats.
+///
+/// This deliberately builds from the app's *real* surfaces — `StageThumbnailView`
+/// (including its now-playing cue), the move row's name/duration pairing, and the
+/// looping progress bar — instead of a screenshot, so onboarding can never drift
+/// out of date with the shipped UI.
+struct OnboardingProductPreview: View {
     let reduceMotion: Bool
-    @State private var settled = false
+    var accent: Color = StyleAccentPalette.salsa.color
+
+    /// `true` adds the "Add name" affordance to the second row, showing the
+    /// unnamed → named transformation the Payoff beat describes.
+    var showsUnnamedRow = false
+
+    @State private var loopProgress: CGFloat = 0.12
 
     var body: some View {
-        VStack(spacing: Spacing.lg) {
-            Five67BrandMark()
-                .frame(width: 148, height: 148)
-                .scaleEffect(settled ? 1 : 0.94)
+        VStack(spacing: Spacing.md) {
+            loopingPlayer
 
-            Text("Your moves, ready when you are")
-                .font(.headline.weight(.bold))
-                .foregroundStyle(Theme.stagePrimary)
+            OnboardingPreviewMoveRow(
+                name: "Cross-body lead",
+                duration: "0:12",
+                isPlaying: true,
+                accent: accent
+            )
 
-            HStack(spacing: Spacing.sm) {
-                productPill("Save", systemImage: "square.and.arrow.down")
-                productPill("Name", systemImage: "pencil")
-                productPill("Loop", systemImage: "repeat")
-            }
+            OnboardingPreviewMoveRow(
+                name: showsUnnamedRow ? "" : "Inside turn",
+                duration: "0:09",
+                isPlaying: false,
+                accent: accent
+            )
         }
-        .padding(Spacing.xl2)
+        .padding(Spacing.lg)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
             Theme.stageSurface,
             in: RoundedRectangle(cornerRadius: 24, style: .continuous)
         )
-        .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Theme.stageStroke, lineWidth: 1)
-        }
-        .onAppear {
-            guard !reduceMotion else {
-                settled = true
-                return
-            }
-            withAnimation(.smooth(duration: 0.45)) {
-                settled = true
-            }
-        }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "A class video split into named moves. Cross-body lead is looping."
+        )
     }
 
-    private func productPill(_ label: String, systemImage: String) -> some View {
-        Label(label, systemImage: systemImage)
-            .font(.caption.weight(.bold))
-            .foregroundStyle(Theme.stageSecondary)
-            .padding(.horizontal, Spacing.smPlus)
-            .frame(minHeight: 36)
-            .background(Theme.stageRaisedSurface, in: Capsule())
-    }
-}
-
-struct OnboardingPayoffArtwork: View {
-    let reduceMotion: Bool
-    @State private var progress: CGFloat = 0.22
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.lg) {
-            HStack(spacing: Spacing.sm) {
-                workflowStep("1", "Trim", systemImage: "scissors")
-                workflowStep("2", "Name", systemImage: "pencil")
-                workflowStep("3", "Loop", systemImage: "repeat")
-            }
-
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text("One class video")
-                    .font(.caption.weight(.bold))
+    private var loopingPlayer: some View {
+        VStack(spacing: Spacing.sm) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.black)
+                Image(systemName: "figure.dance")
+                    .font(.system(size: 44, weight: .light))
                     .foregroundStyle(Theme.stageSecondary)
-                    .textCase(.uppercase)
-                Text("A move you can find and practice")
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(Theme.stagePrimary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: .infinity)
+            .frame(height: 132)
 
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Theme.stageRaisedSurface)
                     Capsule()
-                        .fill(StyleAccentPalette.salsa.color)
-                        .frame(width: max(22, proxy.size.width * progress))
+                        .fill(accent)
+                        .frame(width: max(18, proxy.size.width * loopProgress))
                 }
             }
-            .frame(height: 8)
-            .accessibilityHidden(true)
+            .frame(height: 6)
         }
-        .padding(Spacing.xl2)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background(
-            Theme.stageSurface,
-            in: RoundedRectangle(cornerRadius: 24, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Theme.stageStroke, lineWidth: 1)
-        }
+        .accessibilityHidden(true)
         .onAppear {
-            if reduceMotion {
-                progress = 0.76
-            } else {
-                withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) {
-                    progress = 0.94
-                }
+            guard !reduceMotion else {
+                loopProgress = 0.72
+                return
+            }
+            withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
+                loopProgress = 0.94
             }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Trim, name, and loop a class video into a move you can find and practice")
     }
+}
 
-    private func workflowStep(_ number: String, _ label: String, systemImage: String) -> some View {
-        VStack(spacing: Spacing.xsPlus) {
-            Image(systemName: systemImage)
-                .font(.headline.weight(.bold))
-            Text("\(number) · \(label)")
-                .font(.caption.weight(.bold))
+/// The move row as the editor draws it, minus the model dependency. Kept next to
+/// `OnboardingProductPreview` so both onboarding compositions stay in step with
+/// `MoveRowView`'s layout.
+private struct OnboardingPreviewMoveRow: View {
+    let name: String
+    let duration: String
+    let isPlaying: Bool
+    let accent: Color
+
+    var body: some View {
+        HStack(spacing: Spacing.md) {
+            StageThumbnailView(
+                videoID: nil,
+                fileURL: nil,
+                size: CGSize(width: 54, height: 40),
+                isPlaying: isPlaying,
+                accent: accent
+            )
+
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text(name.isEmpty ? "Unnamed segment" : name)
+                    .font(.body)
+                    .foregroundStyle(name.isEmpty ? Theme.stageSecondary : Theme.stagePrimary)
+                    .lineLimit(1)
+                Text(duration)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(Theme.stageSecondary)
+            }
+
+            Spacer(minLength: Spacing.sm)
+
+            if name.isEmpty {
+                Text("Add name")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(accent)
+                    .padding(.horizontal, Spacing.md)
+                    .frame(minHeight: 34)
+                    .background(Theme.stageRaisedSurface, in: Capsule())
+            }
         }
-        .foregroundStyle(Theme.stagePrimary)
-        .frame(maxWidth: .infinity, minHeight: 72)
-        .background(Theme.stageRaisedSurface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(Spacing.smPlus)
+        .background(
+            Theme.stageRaisedSurface,
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+        )
     }
 }

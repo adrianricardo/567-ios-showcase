@@ -9,6 +9,12 @@ struct VideoDetailView: View {
     private let finishTitle: String?
     private let secondaryFinishTitle: String?
     private let showsTitle: Bool
+    /// Onboarding chrome: when set, the guided-editor progress cue is pinned
+    /// above the top bar so it keeps its single position across every beat.
+    private let progress: OnboardingProgress?
+    /// Distinguishes the secondary exit ("I'll do this later") from the primary
+    /// one. Nil keeps the legacy behavior where both call `onFinish`.
+    private let onSecondaryFinish: (() -> Void)?
     @State private var controller: PlaybackController
     @State private var activeMoveID: UUID?
     @State private var sortedMoves: [Move] = []
@@ -40,6 +46,8 @@ struct VideoDetailView: View {
         finishTitle: String? = nil,
         secondaryFinishTitle: String? = nil,
         showsTitle: Bool = true,
+        progress: OnboardingProgress? = nil,
+        onSecondaryFinish: (() -> Void)? = nil,
         onFinish: ((TimeInterval?) -> Void)? = nil
     ) {
         self.video = video
@@ -47,6 +55,8 @@ struct VideoDetailView: View {
         self.finishTitle = finishTitle
         self.secondaryFinishTitle = secondaryFinishTitle
         self.showsTitle = showsTitle
+        self.progress = progress
+        self.onSecondaryFinish = onSecondaryFinish
         self.onFinish = onFinish
         self._controller = State(wrappedValue: PlaybackController(videoURL: video.fileURL))
         self._sortedMoves = State(wrappedValue: video.movesSorted)
@@ -121,6 +131,12 @@ struct VideoDetailView: View {
 
     private var heroSection: some View {
         VStack(spacing: Spacing.none) {
+            if let progress {
+                OnboardingProgressDots(progress: progress, accent: styleAccent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, Spacing.sm)
+                    .background(Color.black)
+            }
             topBar
             VideoHeroView(
                 controller: controller,
@@ -143,7 +159,16 @@ struct VideoDetailView: View {
 
     private var topBar: some View {
         HStack(spacing: Spacing.sm) {
-            if finishTitle == nil {
+            if let secondaryFinishTitle {
+                // The guided editor's escape hatch. It sits opposite the primary
+                // action so both exits are visible at once.
+                Button(secondaryFinishTitle) { finishEditing(isSecondary: true) }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.84))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .frame(minHeight: Spacing.touchTarget)
+            } else if finishTitle == nil {
                 Button { finishEditing() } label: {
                     Image(systemName: "chevron.left")
                         .font(.title3.weight(.semibold))
@@ -173,13 +198,6 @@ struct VideoDetailView: View {
                     .font(.subheadline.weight(.semibold))
                     .glassNavButtonStyle()
                     .accessibilityLabel(finishTitle)
-            } else if let secondaryFinishTitle {
-                Button(secondaryFinishTitle) {
-                    finishEditing()
-                }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.84))
-                .frame(minHeight: Spacing.touchTarget)
             } else if showsTitle {
                 // Balance the leading back button so the title stays centered.
                 Color.clear.frame(width: Spacing.touchTarget, height: Spacing.touchTarget)
@@ -376,7 +394,7 @@ struct VideoDetailView: View {
         dismiss()
     }
 
-    private func finishEditing() {
+    private func finishEditing(isSecondary: Bool = false) {
         controller.pause()
         if lastMarkedTime == nil {
             Haptics.light()
@@ -384,9 +402,13 @@ struct VideoDetailView: View {
             Haptics.success()
         }
         router.selectedTab = .feed
-        // Report the most recently marked move's start time (if any) so a
-        // feed presenter can re-open on that move's first frame.
-        onFinish?(lastMarkedTime)
+        if isSecondary, let onSecondaryFinish {
+            onSecondaryFinish()
+        } else {
+            // Report the most recently marked move's start time (if any) so a
+            // feed presenter can re-open on that move's first frame.
+            onFinish?(lastMarkedTime)
+        }
         dismiss()
     }
 

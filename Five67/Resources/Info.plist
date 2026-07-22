@@ -22,8 +22,6 @@
 	<string>1</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>567 needs access to your library to import practice videos.</string>
 	<key>NSSupportsLiveActivities</key>
 	<false/>
 	<key>UIApplicationSceneManifest</key>

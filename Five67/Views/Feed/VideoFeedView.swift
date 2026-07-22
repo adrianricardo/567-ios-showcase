@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import Photos
 import PhotosUI
 import UIKit
 
