@@ -51,13 +51,19 @@ struct VideoImporter {
         )
     }
 
-    /// Import from a file URL (e.g. Files picker). Caller is responsible for any
-    /// security-scoped resource access around the URL.
-    static func `import`(fromFileURL url: URL) async throws -> VideoImportResult {
+    /// Import from a file URL (e.g. Files picker, or the bundled demo asset).
+    /// Caller is responsible for any security-scoped resource access around the URL.
+    ///
+    /// `sourceID` is normally nil for user file imports; the bundled demo passes a
+    /// stable identifier so repeat ingestion can be deduped.
+    static func `import`(
+        fromFileURL url: URL,
+        sourceID: String? = nil
+    ) async throws -> VideoImportResult {
         return try await ingest(
             sourceURL: url,
             originalName: url.deletingPathExtension().lastPathComponent,
-            sourceID: nil
+            sourceID: sourceID
         )
     }
 

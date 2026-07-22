@@ -77,11 +77,12 @@ struct OnboardingFlow: View {
                 beat = .paywall
             }
 #endif
-            selectedValueProps = preferences.savedValueProps()
-            let savedStyles = preferences.savedDanceStyles()
-            selectedStyles = styleOptions.first(where: savedStyles.contains).map { [$0] } ?? []
-            selectedVolume = preferences.savedVideoVolume()
+            // Onboarding answers are session-only by contract: they shape the
+            // narrative and are never persisted as analytics/research. A relaunch
+            // therefore restarts the narrative with empty selections — but the
+            // seed video itself survives and is reused.
             Style.seedDefaultsIfNeeded(in: modelContext)
+            restorePersistedSeedIfAvailable()
         }
     }
 
@@ -220,7 +221,6 @@ struct OnboardingFlow: View {
             continueTitle: "Continue",
             toggle: toggleValueProp,
             continueAction: {
-                preferences.saveValueProps(selectedValueProps)
                 goNext()
             }
         )
@@ -315,7 +315,6 @@ struct OnboardingFlow: View {
     private var styleContinueBar: some View {
         VStack(spacing: Spacing.none) {
             Button {
-                preferences.saveDanceStyles(selectedStyles)
                 activateSelectedStyle()
                 goNext()
             } label: {
@@ -345,7 +344,6 @@ struct OnboardingFlow: View {
             continueTitle: "Continue",
             toggle: { selectedVolume = $0 },
             continueAction: {
-                preferences.saveVideoVolume(selectedVolume)
                 goNext()
             }
         )
@@ -568,9 +566,6 @@ struct OnboardingFlow: View {
     }
 
     private func complete() {
-        preferences.saveValueProps(selectedValueProps)
-        preferences.saveDanceStyles(selectedStyles)
-        preferences.saveVideoVolume(selectedVolume)
         activateSelectedStyle()
         preferences.markCompleted()
         onComplete(importedVideo?.id)
@@ -582,7 +577,6 @@ struct OnboardingFlow: View {
         } else {
             selectedValueProps.insert(value)
         }
-        preferences.saveValueProps(selectedValueProps)
         Haptics.select()
     }
 
@@ -592,7 +586,6 @@ struct OnboardingFlow: View {
         } else {
             selectedStyles = [value]
         }
-        preferences.saveDanceStyles(selectedStyles)
         Haptics.select()
     }
 
@@ -645,19 +638,38 @@ struct OnboardingFlow: View {
             let video = VideoImportPersistence.insertVideo(from: result, in: modelContext)
             video.style = styleStore.activeStyle
             try? modelContext.save()
-            importedVideo = video
+            adoptSeed(video)
             Haptics.success()
             beat = .editor
         } catch ImportError.alreadyImported(let existingID) {
-            importedVideo = allVideos.first { $0.id == existingID }
-            if importedVideo == nil {
-                importError = "This video is already in your library."
-            } else {
+            if let existing = allVideos.first(where: { $0.id == existingID }) {
+                adoptSeed(existing)
                 beat = .editor
+            } else {
+                importError = "This video is already in your library."
             }
         } catch {
             importError = error.localizedDescription
         }
+    }
+
+    /// Records the seed so an interrupted onboarding reuses it instead of
+    /// importing a duplicate when it reaches Seed again.
+    private func adoptSeed(_ video: Video) {
+        importedVideo = video
+        preferences.saveSeedVideoID(video.id)
+    }
+
+    /// Resolves a previously persisted seed. Clears the stored ID when the row
+    /// or its file has gone missing so Seed falls back to its normal actions.
+    private func restorePersistedSeedIfAvailable() {
+        guard importedVideo == nil, let seedID = preferences.seedVideoID else { return }
+        guard let video = allVideos.first(where: { $0.id == seedID }),
+              FileManager.default.fileExists(atPath: video.fileURL.path) else {
+            preferences.clearSeedVideoID()
+            return
+        }
+        importedVideo = video
     }
 
     private let valuePropOptions = [

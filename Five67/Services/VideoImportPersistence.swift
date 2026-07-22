@@ -4,13 +4,18 @@ import SwiftData
 enum VideoImportPersistence {
     @discardableResult
     @MainActor
-    static func insertVideo(from result: VideoImportResult, in context: ModelContext) -> Video {
+    static func insertVideo(
+        from result: VideoImportResult,
+        in context: ModelContext,
+        isDemo: Bool = false
+    ) -> Video {
         let video = Video(
             displayName: result.displayName,
             localFilename: result.filename,
             sourceAssetID: result.sourceID,
             recordedAt: result.recordedAt,
-            duration: result.duration
+            duration: result.duration,
+            isDemo: isDemo
         )
         context.insert(video)
         prewarmThumbnails(for: video)

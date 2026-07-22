@@ -5,11 +5,15 @@ struct OnboardingGateView<Content: View>: View {
     @Environment(AppRouter.self) private var router
     @Environment(UnlockStore.self) private var unlockStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage(OnboardingPreferences.Keys.hasCompleted) private var hasCompletedOnboarding = false
+    @AppStorage(OnboardingPreferences.Keys.status) private var statusRaw = ""
     @Query private var videos: [Video]
 
     @State private var onboardingSessionStarted = false
     @State private var showLibraryReadyToast = false
+
+    private var status: OnboardingStatus {
+        OnboardingStatus(rawValue: statusRaw) ?? .notStarted
+    }
 
     private let content: () -> Content
 
@@ -19,7 +23,7 @@ struct OnboardingGateView<Content: View>: View {
 
     var body: some View {
         ZStack {
-            if onboardingSessionStarted && !hasCompletedOnboarding {
+            if onboardingSessionStarted && status != .completed {
                 OnboardingFlow { importedVideoID in
                     completeOnboarding(importedVideoID: importedVideoID)
                 }
@@ -40,11 +44,19 @@ struct OnboardingGateView<Content: View>: View {
             }
         }
         .onAppear {
-            unlockStore.start(existingLibraryCount: videos.count)
-            if OnboardingGatePolicy.shouldPresent(
-                hasCompletedOnboarding: hasCompletedOnboarding,
-                videoCount: videos.count
-            ) {
+            let preferences = OnboardingPreferences()
+            // Demo content is never evidence of an existing library.
+            let personalCount = videos.personalVideoCount
+            let resolved = preferences.resolveStatus(existingLibraryCount: personalCount)
+
+            // A fresh install that is still inside onboarding must never let its
+            // own seed content grandfather it into legacy-unlimited access.
+            unlockStore.start(
+                existingLibraryCount: resolved == .completed ? personalCount : 0
+            )
+
+            if OnboardingGatePolicy.shouldPresent(status: resolved) {
+                preferences.markInProgress()
                 onboardingSessionStarted = true
             }
         }
@@ -54,8 +66,10 @@ struct OnboardingGateView<Content: View>: View {
         // Establish the destination and its result before mounting RootView so
         // onboarding never flashes the default Feed state on the way to Library.
         router.showLibraryAfterOnboarding(importedVideoID: importedVideoID)
+        // Completion is only reached from the paywall (purchase or "Not now").
+        // Clears the seed ID while deliberately retaining the seed content.
         OnboardingPreferences().markCompleted()
-        hasCompletedOnboarding = true
+        statusRaw = OnboardingStatus.completed.rawValue
         onboardingSessionStarted = false
 
         withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .smooth(duration: 0.28)) {

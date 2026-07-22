@@ -19,7 +19,10 @@ struct Five67App: App {
 #if DEBUG
         let arguments = ProcessInfo.processInfo.arguments
         if arguments.contains("-Five67UITestSkipOnboarding") {
-            UserDefaults.standard.set(true, forKey: OnboardingPreferences.Keys.hasCompleted)
+            UserDefaults.standard.set(
+                OnboardingStatus.completed.rawValue,
+                forKey: OnboardingPreferences.Keys.status
+            )
         }
 #endif
         let result = Self.loadContainer()
@@ -43,12 +46,12 @@ struct Five67App: App {
         if arguments.contains("-Five67UITestOnboardingCompletionFixture")
             || arguments.contains("-Five67UITestReviewOnboarding"),
            case .success(let container) = result {
-            UserDefaults.standard.set(false, forKey: OnboardingPreferences.Keys.hasCompleted)
-            if arguments.contains("-Five67UITestReviewOnboarding") {
-                UserDefaults.standard.removeObject(forKey: OnboardingPreferences.Keys.valueProps)
-                UserDefaults.standard.removeObject(forKey: OnboardingPreferences.Keys.danceStyles)
-                UserDefaults.standard.removeObject(forKey: OnboardingPreferences.Keys.videoVolume)
-            }
+            UserDefaults.standard.set(
+                OnboardingStatus.notStarted.rawValue,
+                forKey: OnboardingPreferences.Keys.status
+            )
+            UserDefaults.standard.removeObject(forKey: OnboardingPreferences.Keys.hasCompleted)
+            UserDefaults.standard.removeObject(forKey: OnboardingPreferences.Keys.seedVideoID)
             Self.clearUITestLibrary(in: container)
         }
 #endif

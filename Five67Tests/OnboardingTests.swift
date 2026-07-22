@@ -3,34 +3,90 @@ import Testing
 @testable import Five67
 
 struct OnboardingTests {
-    @Test func onboarding_shows_only_when_uncompleted_and_library_empty() {
-        #expect(OnboardingGatePolicy.shouldPresent(hasCompletedOnboarding: false, videoCount: 0))
-        #expect(!OnboardingGatePolicy.shouldPresent(hasCompletedOnboarding: true, videoCount: 0))
-        #expect(!OnboardingGatePolicy.shouldPresent(hasCompletedOnboarding: false, videoCount: 1))
-        #expect(!OnboardingGatePolicy.shouldPresent(hasCompletedOnboarding: true, videoCount: 1))
+    @Test func onboarding_presents_until_it_is_completed() {
+        // `inProgress` still presents — the narrative restarts at Hook and
+        // reuses its seed video when it reaches Seed.
+        #expect(OnboardingGatePolicy.shouldPresent(status: .notStarted))
+        #expect(OnboardingGatePolicy.shouldPresent(status: .inProgress))
+        #expect(!OnboardingGatePolicy.shouldPresent(status: .completed))
     }
 
-    @Test func onboarding_preferences_persist_completion_and_answers() throws {
+    @Test func existing_installs_are_grandfathered_past_onboarding() {
+        // Explicit stored status always wins.
+        #expect(OnboardingGatePolicy.migratedStatus(
+            persistedStatus: OnboardingStatus.inProgress.rawValue,
+            hasCompletedLegacyFlag: false,
+            existingLibraryCount: 0
+        ) == .inProgress)
+
+        // Pre-V5 Boolean gate.
+        #expect(OnboardingGatePolicy.migratedStatus(
+            persistedStatus: nil,
+            hasCompletedLegacyFlag: true,
+            existingLibraryCount: 0
+        ) == .completed)
+
+        // No status + existing library → grandfathered, never re-onboarded.
+        #expect(OnboardingGatePolicy.migratedStatus(
+            persistedStatus: nil,
+            hasCompletedLegacyFlag: false,
+            existingLibraryCount: 4
+        ) == .completed)
+
+        // No status + empty library → genuine fresh install.
+        #expect(OnboardingGatePolicy.migratedStatus(
+            persistedStatus: nil,
+            hasCompletedLegacyFlag: false,
+            existingLibraryCount: 0
+        ) == .notStarted)
+    }
+
+    @Test func interrupted_onboarding_restarts_the_narrative_and_reuses_its_seed() throws {
+        let suiteName = "OnboardingTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let seedID = UUID()
+
+        let firstRun = OnboardingPreferences(defaults: defaults)
+        #expect(firstRun.status == .notStarted)
+        #expect(firstRun.seedVideoID == nil)
+
+        firstRun.markInProgress()
+        firstRun.saveSeedVideoID(seedID)
+
+        // Process relaunch: still in progress, and the seed survives so the
+        // Seed step reuses it instead of importing a duplicate.
+        let relaunched = OnboardingPreferences(defaults: defaults)
+        #expect(relaunched.status == .inProgress)
+        #expect(relaunched.seedVideoID == seedID)
+        #expect(OnboardingGatePolicy.shouldPresent(status: relaunched.status))
+
+        // An in-progress install is never mistaken for an existing library.
+        #expect(relaunched.resolveStatus(existingLibraryCount: 1) == .inProgress)
+
+        // Completion drops the seed ID but keeps the content.
+        relaunched.markCompleted()
+        let afterCompletion = OnboardingPreferences(defaults: defaults)
+        #expect(afterCompletion.status == .completed)
+        #expect(afterCompletion.seedVideoID == nil)
+        #expect(!OnboardingGatePolicy.shouldPresent(status: afterCompletion.status))
+    }
+
+    @Test func stale_seed_video_id_can_be_cleared_without_losing_progress() throws {
         let suiteName = "OnboardingTests-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let preferences = OnboardingPreferences(defaults: defaults)
-        #expect(!preferences.hasCompletedOnboarding)
-        #expect(preferences.savedValueProps().isEmpty)
-        #expect(preferences.savedDanceStyles().isEmpty)
-        #expect(preferences.savedVideoVolume() == nil)
+        preferences.markInProgress()
+        preferences.saveSeedVideoID(UUID())
 
-        preferences.saveValueProps(["Practice", "Organize"])
-        preferences.saveDanceStyles(["Salsa", "Bachata"])
-        preferences.saveVideoVolume("A stash (10–50)")
-        preferences.markCompleted()
+        // Row or file went missing → drop the stale ID, stay in progress so the
+        // Seed step falls back to PhotosPicker/demo actions.
+        preferences.clearSeedVideoID()
 
-        let reloaded = OnboardingPreferences(defaults: defaults)
-        #expect(reloaded.hasCompletedOnboarding)
-        #expect(reloaded.savedValueProps() == Set(["Practice", "Organize"]))
-        #expect(reloaded.savedDanceStyles() == Set(["Salsa", "Bachata"]))
-        #expect(reloaded.savedVideoVolume() == "A stash (10–50)")
+        #expect(preferences.seedVideoID == nil)
+        #expect(preferences.status == .inProgress)
     }
 
     @Test func known_dance_styles_have_locked_brand_accents() {
