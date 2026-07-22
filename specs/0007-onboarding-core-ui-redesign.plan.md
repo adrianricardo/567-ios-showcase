@@ -179,15 +179,20 @@ Primary files: relevant Swift Testing/UI fixture suites, `Five67/Resources/Info.
 
 ## Existing-Code Traps
 
-- `OnboardingGatePolicy` currently requires `videoCount == 0`; changing only the view state will still bypass interrupted onboarding after seed import.
-- `OnboardingGateView` currently routes through `showLibraryAfterOnboarding` and shows a Library-ready toast.
-- `OnboardingFlow.toggleStyle` is single-select despite the older multi-select language; the approved redesign removes this question entirely.
-- `OnboardingFlow` currently requests full Photos authorization before opening a private picker. Remove both the API call and all now-dead limited/denied branches.
-- `VideoDetailView` passes `showsInlineRename: false`, while `MoveRowView` already contains the desired Add Name UI.
-- `AccessPolicy.freeVideoLimit` is 10, and `UnlockStore.claimedFreeStyleID` is durable UserDefaults state; both unit and UI fixtures encode the current behavior.
-- Feed, Library, and editor currently contain adjacent import/style/delete logic. Reuse their action methods or extract one owner; do not add fallback state machines.
-- Current move swipe code requests the `trash` symbol, but its iOS 26 presentation renders white-on-white. An explicit destructive tint/state is required and must be visually verified.
-- The current paywall component already handles StoreKit loading, purchase, restore, and accessibility focus. Redesign its view hierarchy without replacing transaction logic.
+> These describe the codebase **as it was when the plan was written**. Entries
+> marked ✅ were resolved by the phase named; they are kept so the reasoning is
+> auditable, but do **not** treat them as current facts. Only the ⚠️ entries
+> still describe live code.
+
+- ✅ *(P2)* `OnboardingGatePolicy` currently requires `videoCount == 0`; changing only the view state will still bypass interrupted onboarding after seed import.
+- ✅ *(P4)* `OnboardingGateView` currently routes through `showLibraryAfterOnboarding` and shows a Library-ready toast.
+- ✅ *(P4)* `OnboardingFlow.toggleStyle` is single-select despite the older multi-select language; the approved redesign removes this question entirely.
+- ✅ *(P4)* `OnboardingFlow` currently requests full Photos authorization before opening a private picker. Remove both the API call and all now-dead limited/denied branches.
+- ✅ *(P3)* `VideoDetailView` passes `showsInlineRename: false`, while `MoveRowView` already contains the desired Add Name UI.
+- ✅ *(P1)* `AccessPolicy.freeVideoLimit` is 10, and `UnlockStore.claimedFreeStyleID` is durable UserDefaults state; both unit and UI fixtures encode the current behavior.
+- ✅ *(P3)* Feed, Library, and editor currently contain adjacent import/style/delete logic. Reuse their action methods or extract one owner; do not add fallback state machines.
+- ⚠️ *(P3 code change made; visual check still owed to P6)* Current move swipe code requests the `trash` symbol, but its iOS 26 presentation renders white-on-white. An explicit destructive tint/state is required and must be visually verified.
+- ⚠️ *(live — P5)* The current paywall component already handles StoreKit loading, purchase, restore, and accessibility focus. Redesign its view hierarchy without replacing transaction logic.
 
 ## Verification
 
@@ -285,83 +290,38 @@ Current state: **P1–P4 complete and verified green.** P5–P6 not started.
   §5's "same sheet styling" bullet is structurally satisfied — what remains is
   the neutral-token/stroke pass and the *visual* audit.
 
-#### What P4 inherited from P1–P3 (historical)
+#### P5 starting facts (verified 2026-07-21, saves a discovery pass)
 
-- **Inline "Add name" is already restored everywhere.** P3 deleted
-  `MoveRowView.showsInlineRename` outright, so the normal editor already shows it.
-  The §4 bullet about restoring it is satisfied.
-- **`OnboardingFlow` already has seed reuse** — `adoptSeed(_:)` and
-  `restorePersistedSeedIfAvailable()` (P2). Its `Beat` enum is untouched and is
-  P4's job.
-- **`StyleSelectionSheet(context: .tagImport(count:))`** is the canonical
-  post-import style sheet §4 calls for on the personal-seed path. Reuse it; do
-  not build an onboarding-specific style picker.
-- **`ImportSource`** is now a top-level enum in `Views/Shared/StageSheet.swift`.
-- **`VideoDeletionService`** owns deletion; nothing in P4 should delete a video
-  directly.
-- `VideoDetailView` already accepts `finishTitle`, `secondaryFinishTitle`,
-  `showsTitle`, and `onFinish`. P4 adds top progress and wires "Continue" /
-  "I'll do this later" through those existing inputs rather than new ones.
-- `AppRouter.showLibraryAfterOnboarding` **still exists** and is still called by
-  `OnboardingGateView`. P4 replaces it with the Feed completion route.
-
-### P4 (done)
-- `Views/Onboarding/OnboardingMotivation.swift` (new): the session-only enum
-  owning each answer's label, payoff headline, and supporting copy. Nothing
-  persists it.
-- `Views/Onboarding/OnboardingProgressDots.swift` (new): `OnboardingProgress`
-  (index/total) + the dots view. Extracted so the *same* cue renders in the
-  onboarding scaffold and inside the guided editor, keeping one top position.
-- `Views/Onboarding/OnboardingFlow.swift`: rewritten to the approved 7 beats —
-  `hook, motivation, payoff, seed, editor, result, paywall`. `import Photos`,
-  `PHPhotoLibrary.requestAuthorization`, `photosStatus`, the permission primer,
-  the styles/volume/pain/value-survey beats, and the fake `processing` beat are
-  all gone. Back is offered on every beat except Hook and the paywall (leaving
-  the paywall *is* completion).
-- Seed step: primary opens `PhotosPicker`; secondary is
-  "I don't have one—try a demo" → `OnboardingDemoIngestion`. A personal import
-  opens `StyleSelectionSheet(context: .tagImport(count: 1))` and enters the
-  editor on its dismissal; demo content is pre-styled and skips it. A **restored**
-  seed renders a distinct confirm state ("Your video's still here.") with
-  Continue / "Choose a different video" rather than auto-advancing — auto-advance
-  would make Back from the editor bounce forward forever.
-- `ensureSeedMoveExists()` is called from *both* editor exits (one code path), so
-  Continue-without-marking and "I'll do this later" each guarantee exactly one
-  full-video move and never a duplicate.
-- Result reveal (`OnboardingResultReveal`): the real persisted move on a real
-  `PlaybackController` with `isLooping = true`; no auto-advance.
-- `Views/Onboarding/OnboardingArtwork.swift`: `OnboardingBrandHero`,
-  `OnboardingPayoffArtwork`, and `ProcessingMark` replaced by
-  `OnboardingProductPreview` — a live composition built from the shipped
-  `StageThumbnailView` (including its now-playing cue) and the move row's
-  name/duration/"Add name" layout, so it cannot go stale. `Five67BrandMark`
-  stays (SplashView uses it).
-- `Views/VideoDetail/VideoDetailView.swift`: two new explicit inputs —
-  `progress: OnboardingProgress?` (pinned above the top bar) and
-  `onSecondaryFinish`. `secondaryFinishTitle` now renders in the **leading** slot
-  so "I'll do this later" and "Continue" are visible together;
-  `finishEditing(isSecondary:)` routes the two exits apart.
-- `Services/AppRouter.swift`: `showLibraryAfterOnboarding` and the whole
-  `LibraryArrival` / `pendingLibraryArrival` mechanism removed (onboarding was
-  its only producer) in favor of `showFeedAfterOnboarding(_:)`, which delegates
-  to the existing `showInFeed`. `LibraryPaneView.focusPendingArrival` deleted.
-- `Views/Onboarding/OnboardingGateView.swift`: routes to Feed; the Library-ready
-  toast is gone and was not replaced (the Feed lands focused on the looping
-  result, which is its own confirmation).
-- `Views/Feed/VideoFeedView.swift`: dropped the unused `import Photos`.
-- `project.yml` + `Five67/Resources/Info.plist`: `NSPhotoLibraryUsageDescription`
-  removed after confirming no full-PhotoKit API use remains anywhere.
-- Tests: `OnboardingTests` gained the motivation→payoff copy mapping and the two
-  Feed-completion router tests (replacing the Library-arrival one);
-  `TabBarVerifyTests` replaced its two onboarding journeys with
-  `testOnboardingCompletionLandsInFeed`,
-  `testOnboardingReachesSeedWithoutAPhotoPermissionPrompt` (asserts no system
-  alert and no permission primer), and `testOnboardingSeedStepCanNavigateBack`.
-
-**Not verified in P4:** the seed→editor→result journey end-to-end with a real
-video. The UI tests cannot drive Apple's private picker, and the demo path stays
-blocked on the licensed `OnboardingDemo.mp4`. Everything up to the seed step, the
-completion route, and the copy mapping are covered.
+- **There is one paywall view but two presentations.** `UnlockPaywallView` is
+  rendered full-screen by the onboarding beat
+  (`OnboardingFlow.swift`, `secondaryTitle: "Not now"`) and wrapped by
+  `UnlockPaywallSheet` (same file, ~line 139) for the four in-app triggers:
+  `VideoFeedView`, `LibraryPaneView`, `StylePickerPaneView`, `VideoDetailView`.
+  Redesigning the one view covers both — do not fork a second layout.
+- **The headline/subtitle live outside the view**, in
+  `UnlockPromptReason.title` / `.subtitle` (`Services/AccessPolicy.swift`).
+  §7 wants a universal feature-led headline ("Unlock unlimited videos & styles.")
+  with the reason-specific text kept *below* it, so the reason enum keeps its
+  per-case explanatory copy while the headline moves into the view.
+  `.videoLimit` already reads "3 videos"; `.onboarding`/`.durableEntry` currently
+  say "Pay once. Yours forever."
+- **The CTA is `unlockButtonTitle`** (`UnlockPaywallView.swift`, ~line 105). It
+  already refuses to invent a price when the product is unavailable
+  ("Unlock unavailable") — keep that branch and change only the success string to
+  `"Pay once — \(displayPrice)"`.
+- **Neutral-token targets:** `StagePalette.primary` `0xF7F3E9`, `.secondary`
+  `0xB8B1A7`, `.actionSurface` `0xFFFDF7`, `.ink` `0x10100F`
+  (`Views/Shared/Theme.swift`, ~lines 21–24). All four are warm. The contrast
+  test `quiet_stage_text_pairs_exceed_accessibility_contrast_targets`
+  (`Five67Tests/OnboardingTests.swift`) asserts ink/actionSurface ≥ 7 and
+  secondary/background ≥ 4.5, and every approved style accent vs ink ≥ 4.5 — it
+  will catch a bad neutral swap, so run it first.
+- **`Theme.stageStroke` has 12 call sites** across `LibraryPaneView`,
+  `StylePickerPaneView`, `VideoDetailView`, and `UnlockPaywallView` (plus two
+  inside `Theme.swift` itself). §5 removes the routine ones; keep only boundaries
+  that a grayscale/Increase Contrast review shows are otherwise ambiguous.
+  `VideoDetailView.stageStroke` already thickens under
+  `colorSchemeContrast == .increased` — that is a keeper, not a routine stroke.
 
 ### P1 (done)
 - `Models/Video.swift`: non-optional `isDemo: Bool = false` (+ init param);
@@ -440,6 +400,69 @@ completion route, and the copy mapping are covered.
   `testLibraryVideoDeleteSheetShowsIdentityAndImpact`; the style-chip assertion in
   `testLibraryPopulatedReviewFlow` now reads the chip's accessibility value.
 
+**Not verified in P3:** the sheets' and the red trash glyph's *appearance* was not
+eyeballed. Attempts to capture the simulator display kept returning the stale
+Apple Account sign-in prompt (the separate pre-submission issue). Behavior is
+covered by the tests above; the pixel audit belongs to P6's visual pass.
+
+### P4 (done)
+- `Views/Onboarding/OnboardingMotivation.swift` (new): the session-only enum
+  owning each answer's label, payoff headline, and supporting copy. Nothing
+  persists it.
+- `Views/Onboarding/OnboardingProgressDots.swift` (new): `OnboardingProgress`
+  (index/total) + the dots view. Extracted so the *same* cue renders in the
+  onboarding scaffold and inside the guided editor, keeping one top position.
+- `Views/Onboarding/OnboardingFlow.swift`: rewritten to the approved 7 beats —
+  `hook, motivation, payoff, seed, editor, result, paywall`. `import Photos`,
+  `PHPhotoLibrary.requestAuthorization`, `photosStatus`, the permission primer,
+  the styles/volume/pain/value-survey beats, and the fake `processing` beat are
+  all gone. Back is offered on every beat except Hook and the paywall (leaving
+  the paywall *is* completion).
+- Seed step: primary opens `PhotosPicker`; secondary is
+  "I don't have one—try a demo" → `OnboardingDemoIngestion`. A personal import
+  opens `StyleSelectionSheet(context: .tagImport(count: 1))` and enters the
+  editor on its dismissal; demo content is pre-styled and skips it. A **restored**
+  seed renders a distinct confirm state ("Your video's still here.") with
+  Continue / "Choose a different video" rather than auto-advancing — auto-advance
+  would make Back from the editor bounce forward forever.
+- `ensureSeedMoveExists()` is called from *both* editor exits (one code path), so
+  Continue-without-marking and "I'll do this later" each guarantee exactly one
+  full-video move and never a duplicate.
+- Result reveal (`OnboardingResultReveal`): the real persisted move on a real
+  `PlaybackController` with `isLooping = true`; no auto-advance.
+- `Views/Onboarding/OnboardingArtwork.swift`: `OnboardingBrandHero`,
+  `OnboardingPayoffArtwork`, and `ProcessingMark` replaced by
+  `OnboardingProductPreview` — a live composition built from the shipped
+  `StageThumbnailView` (including its now-playing cue) and the move row's
+  name/duration/"Add name" layout, so it cannot go stale. `Five67BrandMark`
+  stays (SplashView uses it).
+- `Views/VideoDetail/VideoDetailView.swift`: two new explicit inputs —
+  `progress: OnboardingProgress?` (pinned above the top bar) and
+  `onSecondaryFinish`. `secondaryFinishTitle` now renders in the **leading** slot
+  so "I'll do this later" and "Continue" are visible together;
+  `finishEditing(isSecondary:)` routes the two exits apart.
+- `Services/AppRouter.swift`: `showLibraryAfterOnboarding` and the whole
+  `LibraryArrival` / `pendingLibraryArrival` mechanism removed (onboarding was
+  its only producer) in favor of `showFeedAfterOnboarding(_:)`, which delegates
+  to the existing `showInFeed`. `LibraryPaneView.focusPendingArrival` deleted.
+- `Views/Onboarding/OnboardingGateView.swift`: routes to Feed; the Library-ready
+  toast is gone and was not replaced (the Feed lands focused on the looping
+  result, which is its own confirmation).
+- `Views/Feed/VideoFeedView.swift`: dropped the unused `import Photos`.
+- `project.yml` + `Five67/Resources/Info.plist`: `NSPhotoLibraryUsageDescription`
+  removed after confirming no full-PhotoKit API use remains anywhere.
+- Tests: `OnboardingTests` gained the motivation→payoff copy mapping and the two
+  Feed-completion router tests (replacing the Library-arrival one);
+  `TabBarVerifyTests` replaced its two onboarding journeys with
+  `testOnboardingCompletionLandsInFeed`,
+  `testOnboardingReachesSeedWithoutAPhotoPermissionPrompt` (asserts no system
+  alert and no permission primer), and `testOnboardingSeedStepCanNavigateBack`.
+
+**Not verified in P4:** the seed→editor→result journey end-to-end with a real
+video. The UI tests cannot drive Apple's private picker, and the demo path stays
+blocked on the licensed `OnboardingDemo.mp4`. Everything up to the seed step, the
+completion route, and the copy mapping are covered.
+
 Next step: **P5** — the canonical paywall's typography-only redesign with the
 localized StoreKit price, plus the neutral-token and stroke-removal pass.
 
@@ -452,11 +475,6 @@ Checks run (all green, 2026-07-21):
 - `xcodebuild test -only-testing:Five67Tests` → 52 tests / 7 suites passed;
   MigrationTests passes with 6 pre-existing known issues (V3→V4 ZSTYLE, accepted).
 - `make test` → 21/21 UI tests, 0 failures.
-
-**Not verified in P3:** the sheets' and the red trash glyph's *appearance* was not
-eyeballed. Attempts to capture the simulator display kept returning the stale
-Apple Account sign-in prompt (the separate pre-submission issue). Behavior is
-covered by the tests above; the pixel audit belongs to P6's visual pass.
 
 Open questions: None. Required external input remains the licensed `OnboardingDemo.mp4`
 asset and its dance-style label; `OnboardingDemoIngestion.styleID` currently
