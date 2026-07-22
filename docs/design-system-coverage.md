@@ -4,7 +4,7 @@
 
 ## Context key
 
-- **Warm Stage:** authored product surface on the near-black canvas with graphite content surfaces and one warm-white primary action.
+- **Warm Stage:** authored product surface on the near-black canvas with graphite content surfaces and one white primary action. (The "warm" in the name is historical — 0007 P5 made every neutral a pure gray; the structure is unchanged.)
 - **Immersive:** black/video-owned canvas with legible neutral over-video chrome and selective style-accent progress.
 - **Native utility:** system-owned or recovery-oriented UI where adaptive platform treatment is more truthful and usable than forcing Quiet Stage.
 

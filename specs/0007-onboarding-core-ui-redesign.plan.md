@@ -191,8 +191,8 @@ Primary files: relevant Swift Testing/UI fixture suites, `Five67/Resources/Info.
 - ✅ *(P3)* `VideoDetailView` passes `showsInlineRename: false`, while `MoveRowView` already contains the desired Add Name UI.
 - ✅ *(P1)* `AccessPolicy.freeVideoLimit` is 10, and `UnlockStore.claimedFreeStyleID` is durable UserDefaults state; both unit and UI fixtures encode the current behavior.
 - ✅ *(P3)* Feed, Library, and editor currently contain adjacent import/style/delete logic. Reuse their action methods or extract one owner; do not add fallback state machines.
-- ⚠️ *(P3 code change made; visual check still owed to P6)* Current move swipe code requests the `trash` symbol, but its iOS 26 presentation renders white-on-white. An explicit destructive tint/state is required and must be visually verified.
-- ⚠️ *(live — P5)* The current paywall component already handles StoreKit loading, purchase, restore, and accessibility focus. Redesign its view hierarchy without replacing transaction logic.
+- ✅ *(P3 code; visually confirmed in P6)* Current move swipe code requests the `trash` symbol, but its iOS 26 presentation renders white-on-white. An explicit destructive tint/state is required and must be visually verified. — The P6 audit screenshot shows a white trash glyph on a red capsule. Resolved.
+- ✅ *(P5)* The current paywall component already handles StoreKit loading, purchase, restore, and accessibility focus. Redesign its view hierarchy without replacing transaction logic.
 
 ## Verification
 
@@ -237,8 +237,8 @@ Primary files: relevant Swift Testing/UI fixture suites, `Five67/Resources/Info.
 | P2 Onboarding session/demo | done* | claude-code | 2026-07-21 | Status/seed + demo ingestion service green. *Demo runtime path unverifiable until `OnboardingDemo.mp4` lands |
 | P3 Shared actions and rows | done | claude-code | 2026-07-21 | Shared sheets, `VideoDeletionService`, style list, thumbnail cue. `make build` + `make test` green. Sheet *styling* not yet eyeballed — see P6 |
 | P4 Onboarding UI/navigation | done | claude-code | 2026-07-21 | Approved 7-beat sequence, PhotoKit removed, Feed completion route. `make build` + `make test` green |
-| P5 Paywall/visual system | pending | - | - | Neutral tokens and canonical paywall |
-| P6 Verification/docs | pending | - | - | Build, tests, simulator, review artifacts |
+| P5 Paywall/visual system | done | claude-code | 2026-07-21 | Typography-only paywall, localized price CTA, neutral tokens, strokes reduced to a contrast-only rule. `make build` + `make test` green. *Visual/grayscale audit still owed to P6* |
+| P6 Verification/docs | done* | claude-code | 2026-07-21 | Visual audit run and reviewed; App Review notes, decision records, and design-system tokens updated. `make build` + `make test` green. *Two external blockers remain: the licensed `OnboardingDemo.mp4`, and on-device Increase Contrast verification |
 
 Status values: `pending`, `in-progress`, `blocked`, `done`.
 
@@ -247,9 +247,16 @@ Status values: `pending`, `in-progress`, `blocked`, `done`.
 ### Start here (cold session)
 
 1. Read `AGENTS.md`/`CLAUDE.md`, then this plan top-to-bottom. Do not re-derive
-   P1–P4 — they are committed and green.
-2. Resume at **P5** ("Execution Order" §5). Mark its Progress row `in-progress`
-   before editing.
+   P1–P6 — they are green (P1–P4 committed; P5–P6 in the worktree).
+2. **All six phases are implemented.** What remains is not a phase — it is two
+   external inputs and the artifacts that depend on them:
+   a. add the licensed `OnboardingDemo.mp4` to the app target, confirm its
+      dance-style label, and run the demo journey end-to-end;
+   b. verify the Increase Contrast boundary on a physical device
+      (`docs/open-questions-ios.md`);
+   c. re-shoot the App Review screenshots from a `make run-xcode` build so the
+      paywall shows the real localized price, then work
+      `docs/p4-submission.md`'s checklist.
 3. Verify with `make build`, then
    `xcodebuild test -scheme Five67 -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath build/DerivedData -only-testing:Five67Tests`
    for a fast loop; run the full `make test` (adds ~5 min of UI tests) before
@@ -257,7 +264,8 @@ Status values: `pending`, `in-progress`, `blocked`, `done`.
 4. `MigrationTests` passing "with 6 known issues" is expected and correct — that
    is the accepted V3→V4 ZSTYLE breakage, not a regression.
 
-Current state: **P1–P4 complete and verified green.** P5–P6 not started.
+Current state: **P1–P6 complete and verified green**, except the two external
+blockers listed above. `make build`, 54 unit tests, and 24 UI tests all pass.
 
 #### Environment facts
 
@@ -275,53 +283,43 @@ Current state: **P1–P4 complete and verified green.** P5–P6 not started.
   test. Use `XCUIScreen.main.screenshot()` attachments inside a UI test, or check
   visuals by hand, if you need to confirm appearance.
 
-#### What P5 inherits from P1–P4 (do not rebuild these)
+#### Reference: what P6 inherited from P1–P5 (do not rebuild these)
 
-- **The paywall is already reached with `secondaryTitle: "Not now"`** from the
-  onboarding beat, and its completion already routes to Feed. P5 changes
-  `UnlockPaywallView`'s *presentation* only — typography-only layout, the two
-  open benefit rows, and `"Pay once — \(displayPrice)"` — never its StoreKit
-  transaction, restore, or accessibility logic.
-- `BulletLine` still lives in `OnboardingFlow.swift` and is used only by
-  `UnlockPaywallView`. P5's benefit rows replace it; delete it when they do.
-- The free-limit copy already says "3 videos" (`AccessPolicy`, P1). P5 only needs
-  to audit for any remaining hard-coded 10.
-- Every compact sheet already renders through the one `StageSheet` container, so
-  §5's "same sheet styling" bullet is structurally satisfied — what remains is
-  the neutral-token/stroke pass and the *visual* audit.
+- **Every code change §1–§5 asks for is in.** P6 is the metadata, asset, test-
+  fixture, and documentation phase plus the one thing no earlier phase could do:
+  the *visual* audit. Do not reopen P1–P5 design decisions to "improve" them.
+- The three-video cap is already reflected in runtime copy, unit tests, and UI
+  fixtures. What §6 still wants is the **App Review reachability notes and
+  screenshots** updated to the new paywall and the Feed completion route.
+- No hard-coded `10` and no hard-coded `$6.99` remain in runtime code
+  (`$6.99` appears only in the two `.storekit` fixtures and the
+  `UnlockStoreTests` assertion about them, which is correct).
 
-#### P5 starting facts (verified 2026-07-21, saves a discovery pass)
+#### P6 starting facts (verified 2026-07-21; kept for auditability)
 
-- **There is one paywall view but two presentations.** `UnlockPaywallView` is
-  rendered full-screen by the onboarding beat
-  (`OnboardingFlow.swift`, `secondaryTitle: "Not now"`) and wrapped by
-  `UnlockPaywallSheet` (same file, ~line 139) for the four in-app triggers:
-  `VideoFeedView`, `LibraryPaneView`, `StylePickerPaneView`, `VideoDetailView`.
-  Redesigning the one view covers both — do not fork a second layout.
-- **The headline/subtitle live outside the view**, in
-  `UnlockPromptReason.title` / `.subtitle` (`Services/AccessPolicy.swift`).
-  §7 wants a universal feature-led headline ("Unlock unlimited videos & styles.")
-  with the reason-specific text kept *below* it, so the reason enum keeps its
-  per-case explanatory copy while the headline moves into the view.
-  `.videoLimit` already reads "3 videos"; `.onboarding`/`.durableEntry` currently
-  say "Pay once. Yours forever."
-- **The CTA is `unlockButtonTitle`** (`UnlockPaywallView.swift`, ~line 105). It
-  already refuses to invent a price when the product is unavailable
-  ("Unlock unavailable") — keep that branch and change only the success string to
-  `"Pay once — \(displayPrice)"`.
-- **Neutral-token targets:** `StagePalette.primary` `0xF7F3E9`, `.secondary`
-  `0xB8B1A7`, `.actionSurface` `0xFFFDF7`, `.ink` `0x10100F`
-  (`Views/Shared/Theme.swift`, ~lines 21–24). All four are warm. The contrast
-  test `quiet_stage_text_pairs_exceed_accessibility_contrast_targets`
-  (`Five67Tests/OnboardingTests.swift`) asserts ink/actionSurface ≥ 7 and
-  secondary/background ≥ 4.5, and every approved style accent vs ink ≥ 4.5 — it
-  will catch a bad neutral swap, so run it first.
-- **`Theme.stageStroke` has 12 call sites** across `LibraryPaneView`,
-  `StylePickerPaneView`, `VideoDetailView`, and `UnlockPaywallView` (plus two
-  inside `Theme.swift` itself). §5 removes the routine ones; keep only boundaries
-  that a grayscale/Increase Contrast review shows are otherwise ambiguous.
-  `VideoDetailView.stageStroke` already thickens under
-  `colorSchemeContrast == .increased` — that is a keeper, not a routine stroke.
+- **Two visual items are explicitly owed to P6 and are the only unverified work
+  in the whole batch:**
+  1. the compact sheets' appearance and the red swipe-delete trash glyph (P3);
+  2. the neutral-token/stroke pass in color **and grayscale**, plus Increase
+     Contrast (P5) — confirming no surface became ambiguous now that routine
+     hairlines are gone.
+- **Screenshots from `xcrun simctl io booted screenshot` are not trustworthy
+  here** — they kept returning the stale Apple Account sign-in prompt. Use
+  `XCUIScreen.main.screenshot()` attachments inside a UI test (the existing
+  `testScreenshotsAllTabs` is the natural hook) or check by hand.
+- **Blocked input, unchanged:** the licensed `OnboardingDemo.mp4` and its style
+  label. Until it lands, `OnboardingDemoIngestion` throws `.assetMissing`, its
+  `styleID` defaults to Salsa, and the demo journey cannot be run. Add the file
+  to the app target and confirm target membership + installed-bundle lookup when
+  it arrives.
+- **`Info.plist` work for §6 is already done** — `NSPhotoLibraryUsageDescription`
+  was removed in P4 from both `project.yml` and `Five67/Resources/Info.plist`.
+  Remember the project is XcodeGen-generated: edit `project.yml`, never the
+  `.xcodeproj`.
+- **Obsolete onboarding preference keys:** P2 already stopped writing the legacy
+  `hasCompleted` Boolean and the survey keys; `hasCompleted` is still *read* once
+  for migration and must stay until the compatibility path is retired
+  deliberately, which is not a P6 cleanup.
 
 ### P1 (done)
 - `Models/Video.swift`: non-optional `isDemo: Bool = false` (+ init param);
@@ -463,19 +461,128 @@ video. The UI tests cannot drive Apple's private picker, and the demo path stays
 blocked on the licensed `OnboardingDemo.mp4`. Everything up to the seed step, the
 completion route, and the copy mapping are covered.
 
-Next step: **P5** — the canonical paywall's typography-only redesign with the
-localized StoreKit price, plus the neutral-token and stroke-removal pass.
+### P5 (done)
+- `Services/AccessPolicy.swift`: `UnlockPromptReason.title`/`.subtitle` collapsed
+  into one `explanation` line. The headline is now universal and owned by the
+  view, so the enum only answers "why is *this* user seeing it":
+  `.onboarding`/`.durableEntry` → "One payment. No subscription, ever.";
+  `.videoLimit` → "Your free library includes \(AccessPolicy.freeVideoLimit)
+  videos." (interpolated, so the cap can never drift out of the copy again);
+  `.styleLimit` → "Your free library includes one dance style."
+- `Views/Shared/UnlockPaywallView.swift`: typography-only. Leading-aligned
+  headline "Unlock unlimited videos & styles." + `reason.explanation`, then two
+  **open** benefit rows (title + supporting line, no card, no background, no
+  stroke) built by a private `benefitRow(_:_:)`. The enclosing
+  `RoundedRectangle`/`stageStroke` card is gone. `unlockButtonTitle` now returns
+  `"Pay once — \(displayPrice)"`; its "Unlock unavailable" branch is untouched,
+  so the view still never invents a price. StoreKit purchase/restore,
+  `UnlockPurchaseOutcome` handling, the status messages, and the
+  `@AccessibilityFocusState` focus moves were **not** modified.
+- `Views/Onboarding/OnboardingFlow.swift`: `BulletLine` deleted — the benefit
+  rows replaced its only use.
+- `Views/Shared/Theme.swift`: the four warm foregrounds are now pure neutrals —
+  `primary` `0xF7F3E9`→`0xF2F2F2`, `secondary` `0xB8B1A7`→`0xB0B0B0`,
+  `actionSurface` `0xFFFDF7`→`0xFFFFFF`, `ink` `0x10100F`→`0x101010`. Style
+  accents are unchanged and remain the only color the app spends.
+- **Strokes are now one rule, not 12 decisions.** `Theme.stageStroke` (a flat
+  `white.opacity(0.09)`) is deleted and replaced by
+  `Theme.stageBoundary(_ contrast: ColorSchemeContrast)`, which returns `.clear`
+  normally and `stageSecondary.opacity(0.6)` under Increase Contrast. Surfaces
+  are distinguished by fill (`stageSurface` on `stageBackground`); a hairline
+  comes back only where it carries meaning. This generalizes the treatment
+  `VideoDetailView` already had rather than inventing a new one. All call sites
+  route through it: `StageSelectableRow` and `StageSecondaryActionButtonStyle`
+  (both gained `@Environment(\.colorSchemeContrast)`), `StylePickerPaneView`
+  (same), and the local `stageStroke` helpers in `LibraryPaneView` and
+  `VideoDetailView`, which now just forward to it.
+- Tests: `OnboardingTests.quiet_stage_neutrals_carry_no_color_cast` asserts
+  R==G==B for all seven `StagePalette` neutrals, so a warm value cannot creep
+  back; the existing contrast test still passes unchanged. The three paywall
+  assertions in `TabBarVerifyTests` now check the shared `paywallHeadline`
+  constant plus the reason-specific explanation.
 
-Files changed so far: the P1–P4 files listed above,
+**Not verified in P5:** appearance. The neutral swap and the stroke removal were
+verified numerically (contrast + neutrality tests) but not reviewed in color,
+grayscale, or Increase Contrast on a device. That review is P6's, together with
+P3's sheet/trash-glyph audit.
+
+### P6 (done, two external blockers)
+
+- `Five67UITests/VisualAuditTests.swift` (new): captures the surfaces whose
+  *appearance* P3/P5 changed — library rows, the swipe-delete glyph, all four
+  compact sheets, the styles tab, the paywall, and the onboarding hook — as
+  in-process `XCUIScreen.main.screenshot()` attachments, because
+  `simctl io booted screenshot` is unreliable in this project. Export them with
+  `xcrun xcresulttool export attachments --path <result>.xcresult
+  --output-path <dir>`; the file header documents the flow. Adds ~60s to
+  `make test`.
+- **Visual audit result (reviewed, not just captured):**
+  - the red swipe-delete trash renders correctly — this closes P3's ⚠️ trap;
+  - the paywall matches §7: universal headline, two open rows, no card, neutral;
+  - library rows, sheets, and fields stay legible with the routine strokes gone —
+    `stageSurface` on `stageBackground` is a sufficient boundary;
+  - grayscale pass: nothing depends on color alone (selection is the checkmark,
+    the destructive action carries a glyph and the word "Delete", style dots are
+    identity metadata beside a text label);
+  - the now-playing cue sits on the thumbnail and obscures neither art nor text.
+- **Increase Contrast could NOT be verified** and is now the one accessibility
+  gap. `xcrun simctl ui booted increase_contrast enabled` changes nothing in the
+  app — confirmed by pixel diff before *and* after a full simulator reboot, and
+  iOS's own chrome doesn't change either, so the toggle isn't reaching app
+  processes on this runtime. This matters more after P5 than before it: routine
+  hairlines are gone, so `Theme.stageBoundary` is now the only thing that ever
+  draws one. Locked by the unit test
+  `stage_boundary_is_drawn_only_under_increased_contrast`, and logged for device
+  verification in `docs/open-questions-ios.md`.
+- `docs/p4-submission.md`: App Review notes rewritten to the shipped 0007 flow —
+  the demo escape hatch, "Not now", and an explicit statement that the app never
+  requests Photo Library access (private picker; `NSPhotoLibraryUsageDescription`
+  intentionally absent). The IAP review-screenshot spec now names the new
+  headline, benefit rows, and `Pay once — <price>` CTA, and warns that a CLI run
+  without StoreKit shows the "Unlock unavailable" fallback, which must not be
+  submitted. Added checklist rows for the Info.plist check and re-shooting every
+  pre-0007 screenshot.
+- `docs/design-decisions.md`: two appended records — the three-video cap and
+  redesigned onboarding (naming 0005's 10-video cap, `onboarding-0005.md`, and
+  0006's product assumption as superseded, without rewriting them), and the
+  neutral-token/boundary decision (an *amendment* to Warm Stage, not a
+  replacement).
+- `docs/design-system.md`: the token table now documents `stageBoundary(_:)` in
+  place of `stageStroke`, and the warm-white language is corrected to neutral;
+  `docs/design-system-coverage.md` notes that "Warm Stage" is now a historical
+  name for an all-neutral palette.
+- Verified no work was needed on: StoreKit fixtures (both `.storekit` files carry
+  only the product/price and say nothing about caps or iCloud cleanup), UI-test
+  launch arguments (every argument the tests pass is handled in `Five67App` or
+  `UnlockStore` — no orphans in either direction), and obsolete preference keys
+  (P2 already stopped writing the survey keys; `hasCompleted` is still *read* for
+  migration and must stay).
+
+**Blocked in P6 (external inputs, not code):**
+1. `OnboardingDemo.mp4` — still not supplied, so the demo journey remains
+   unrunnable and `OnboardingDemoIngestion.styleID` still defaults to Salsa.
+2. On-device Increase Contrast verification (above).
+
+Next step: supply the demo asset, then re-shoot App Review screenshots from a
+`make run-xcode` build (StoreKit loaded) and run the device accessibility check.
+
+Files changed: the P1–P6 files listed above,
 `Five67Tests/OnboardingTests.swift`, `Five67UITests/TabBarVerifyTests.swift`,
-and this plan.
+`Five67UITests/VisualAuditTests.swift`, `docs/p4-submission.md`,
+`docs/design-decisions.md`, `docs/design-system.md`,
+`docs/design-system-coverage.md`, `docs/open-questions-ios.md`, and this plan.
 
 Checks run (all green, 2026-07-21):
 - `make build` → BUILD SUCCEEDED.
-- `xcodebuild test -only-testing:Five67Tests` → 52 tests / 7 suites passed;
+- `xcodebuild test -only-testing:Five67Tests` → 54 tests / 7 suites passed;
   MigrationTests passes with 6 pre-existing known issues (V3→V4 ZSTYLE, accepted).
-- `make test` → 21/21 UI tests, 0 failures.
+  The `Lifetime unlock StoreKit behavior` suite is **skipped** on this CLI path —
+  it needs the Xcode scheme's StoreKit config (`make run-xcode`).
+- `make test` → 24/24 UI tests, 0 failures.
+- Visual audit captured and reviewed in color and grayscale (see P6 above).
+  Increase Contrast could not be exercised in the simulator.
 
-Open questions: None. Required external input remains the licensed `OnboardingDemo.mp4`
-asset and its dance-style label; `OnboardingDemoIngestion.styleID` currently
-defaults to Salsa and must be confirmed when the asset lands.
+Open questions: none in the plan. Two external inputs remain: the licensed
+`OnboardingDemo.mp4` and its dance-style label (`OnboardingDemoIngestion.styleID`
+currently defaults to Salsa), and the on-device Increase Contrast check tracked in
+`docs/open-questions-ios.md`.

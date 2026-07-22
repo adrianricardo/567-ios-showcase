@@ -46,7 +46,7 @@ Joyful, premium, simple, minimal, and polished. The product should feel unusuall
 
 ## Foundation
 
-- Flat near-black space with graphite content surfaces and warm-white hierarchy.
+- Flat near-black space with graphite content surfaces and a neutral near-white hierarchy (the foregrounds were de-warmed in 0007 P5).
 - No gradients, decorative glows, ornamental glass, or color-washed cards.
 - Apple system typography. Use a rounded system face only for major, friendly titles.
 - Prefer a few large, legible objects over dense collections of small controls.
@@ -57,9 +57,9 @@ Joyful, premium, simple, minimal, and polished. The product should feel unusuall
 | Level | Use | Behavior |
 |---|---|---|
 | Canvas | App/content background | Flat near-black; never used to signal selection. |
-| Surface | Cards, rows, fields | Solid graphite with a quiet edge only when separation needs help. |
+| Surface | Cards, rows, fields | Solid graphite. The fill *is* the boundary; an edge is drawn only under Increase Contrast (0007 P5). |
 | Raised | Structural elevation | Darker/lighter graphite for a selected segment container, tray, or elevated group—not a default row-selection signal. |
-| Action | One primary action | Warm-white fill with stage-ink foreground. |
+| Action | One primary action | Pure-white fill with stage-ink foreground. |
 
 ### Semantic tokens
 
@@ -70,11 +70,11 @@ The current implementation lives in `Five67/Views/Shared/Theme.swift`. Migration
 | `stageBackground` | Flat app/content canvas | Keep. |
 | `stageSurface` | Graphite card, row, and field | Keep. |
 | `stageRaisedSurface` | Structural elevation and selected segment container | Keep; do not use automatically for selected rows. |
-| `stagePrimary` | Warm-white text | Keep as foreground only after action token split. |
+| `stagePrimary` | Neutral near-white text (`0xF2F2F2`) | Keep as foreground only after action token split. |
 | `stageSecondary` | Supporting text | Keep. |
-| `stageActionSurface` | Warm-white primary-action fill | Rename/split from the POC `stageSelectionSurface`. |
+| `stageActionSurface` | Pure-white primary-action fill (`0xFFFFFF`) | Rename/split from the POC `stageSelectionSurface`. |
 | `stageInk` | Near-black foreground on action/accent surfaces | Keep. |
-| `stageStroke` | Quiet edge definition | Keep. |
+| `stageBoundary(_:)` | The one boundary recipe | **Replaced `stageStroke` in 0007 P5.** Returns `.clear` normally and a visible hairline only when `colorSchemeContrast == .increased`. Do not reintroduce routine strokes. |
 
 Remove `stageSelectionSurface` after its call sites migrate. Selection is a component state, not a light color token.
 
@@ -82,8 +82,8 @@ Remove `stageSelectionSurface` after its call sites migrate. Selection is a comp
 
 | Role | Purpose and prominence | Color / surface behavior | Single visible indicator |
 |---|---|---|---|
-| Primary action | Advance or begin the screen's main task; highest emphasis | Warm-white action fill + stage ink. Accent may appear only in a compact icon when it adds meaning. | Verb-first label; directional/play glyph only when it clarifies the action. |
-| Selection | Show a saved choice | Ordinary graphite row; never warm-white fill and no automatic surface change. | Checkmark. |
+| Primary action | Advance or begin the screen's main task; highest emphasis | Pure-white action fill + stage ink. Accent may appear only in a compact icon when it adds meaning. | Verb-first label; directional/play glyph only when it clarifies the action. |
+| Selection | Show a saved choice | Ordinary graphite row; never white fill and no automatic surface change. | Checkmark. |
 | Playing / current content | Identify the item controlling playback | Ordinary graphite row. | Style-accent waveform. |
 | Active navigation | Show current destination or local mode | Native neutral Liquid Glass for app chrome; one raised graphite container for custom local modes. | System selection treatment or the selected container, treated as one atomic cue. |
 | Progress | Show position through onboarding, video, or practice | Style accent fills a neutral track or compact current marker. | Use the track for relative position; add time/count only when exact position is independently useful. |
@@ -159,7 +159,7 @@ Accent is a signal, not a background system. Use it for style identity dots, pro
 
 - Video may own the upper canvas; supporting content returns to solid Quiet Stage surfaces.
 - Playback progress uses the active style accent. Floating playback/navigation controls remain neutral.
-- The current clip uses one waveform glyph; the practice CTA uses the one warm-white action fill.
+- The current clip uses one waveform glyph; the practice CTA uses the one white action fill.
 
 ## Liquid Glass
 

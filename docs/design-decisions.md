@@ -2,6 +2,26 @@
 
 Newest decisions first. These are approved iOS experience decisions; product-level principles also live in the shared product brain.
 
+## 2026-07-21 — Three-video free cap and the redesigned onboarding
+
+**Decision:** The free tier keeps **3 personal videos** and one personal-content style. Onboarding becomes the approved 7-beat sequence — hook, motivation, tailored payoff, seed video, guided editor, result reveal, paywall — and ends by routing to the Feed focused on the user's own first move. The bundled demo clip is identified persistently (`Video.isDemo`, schema V5) and never counts toward the cap, the free-style claim, legacy grandfathering, or library exports. Video selection uses Apple's private `PhotosPicker` only; the app no longer requests Photo Library authorization and ships without `NSPhotoLibraryUsageDescription`.
+
+**Supersedes:** `specs/0005-freemium-unlock-smart-import.md`'s **10-video** cap and its 12-beat onboarding blueprint (`docs/onboarding-0005.md`), and the "up to 10 videos" product assumption recorded in `specs/0006-release-closure.plan.md`. Those documents remain accurate records of what shipped as v1.0 — do not read them as current behavior.
+
+**Rationale:** 10 videos put the cap-hit roughly a month out, long after the moment the user has felt the product work. Three lands the decision while the first named move is still the thing they are looking at. The demo exclusion is what makes that honest: a user who never imported anything of their own is never charged for the clip 567 gave them.
+
+**Evidence:** `specs/0007-onboarding-core-ui-redesign.plan.md` (P1–P6), and Adrian's approval of the redesign sequence.
+
+## 2026-07-21 — Neutral Quiet Stage foreground, and boundaries only where they mean something
+
+**Decision:** The Quiet Stage foreground tokens become pure neutrals (`primary` `0xF2F2F2`, `secondary` `0xB0B0B0`, `actionSurface` `0xFFFFFF`, `ink` `0x101010`); every `StagePalette` value now has equal RGB channels. Routine hairline strokes are removed from cards, buttons, fields, and rows — a surface is distinguished by its **fill**, not by an outline. `Theme.stageBoundary(_:)` is the single boundary recipe and draws only under Increase Contrast.
+
+**Rationale:** Warm white competed with the dance-style accents, which are supposed to be the only color the app spends. The strokes were doing the same thing in miniature — decorating a boundary that `stageSurface` on `stageBackground` already states. Keeping one contrast-aware helper means the exception stays reviewable instead of being re-decided per view.
+
+**Amends:** the Warm Stage foundation (2026-07-14) — its structure, single-cue rule, and accent policy are unchanged; only the warmth of the neutrals and the routine strokes are withdrawn.
+
+**Evidence:** `specs/0007-onboarding-core-ui-redesign.plan.md` P5, the `quiet_stage_neutrals_carry_no_color_cast` and contrast tests, and the P6 visual audit. The Increase Contrast branch is verified by unit test but **not yet on a device** — see `open-questions-ios.md`.
+
 ## 2026-07-14 — Use Family Values as the primary experience-craft framework
 
 **Decision:** Heavily adopt Family Values' ordered principles—simplicity through gradual revelation, fluidity through continuity, and delight through selective emphasis—across 567's onboarding, organization, and practice journeys. Adapt the principles to 567 and native iOS; do not copy Family's wallet-specific UI or tokens literally.
