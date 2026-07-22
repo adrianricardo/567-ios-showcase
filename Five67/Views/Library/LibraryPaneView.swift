@@ -29,6 +29,13 @@ struct LibraryPaneView: View {
         case video(UUID)
     }
 
+    /// A quick-filter pick. `all` is distinct from "nothing was picked", which
+    /// is why this isn't just an optional `Style`.
+    private enum StyleFilterChoice {
+        case all
+        case style(Style)
+    }
+
     let activeVideoID: UUID?
     let activeMoveID: UUID?
     let onSelectVideo: (Video) -> Void
@@ -41,16 +48,26 @@ struct LibraryPaneView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @Environment(AppRouter.self) private var router
+    @Environment(UnlockStore.self) private var unlockStore
 
     @Query(sort: [SortDescriptor(\Video.importedAt, order: .reverse)])
     private var allVideos: [Video]
+
+    @Query(sort: \Style.createdAt, order: .forward) private var allStyles: [Style]
 
     @AppStorage("libraryPaneTab") private var tab: PaneTab = .moves
     @State private var search = ""
     @AccessibilityFocusState private var accessibilityFocus: AccessibilityFocus?
 
     @State private var deleteVideoTarget: Video?
-    @State private var showDeleteVideoConfirm = false
+
+    // Quick style filter. Selection is applied on dismiss so a style the free
+    // tier can't use opens the paywall after this sheet is gone.
+    @State private var showStylePicker = false
+    @State private var styleFilterChoice: StyleFilterChoice?
+    @State private var unlockPrompt: UnlockPromptReason?
+    @State private var pendingFilterStyle: Style?
+    @State private var unlockSucceeded = false
 
     // Export
     @State private var isExporting = false
@@ -131,18 +148,22 @@ struct LibraryPaneView: View {
             onMetadataExport: { Task { await runExport(includeVideos: false) } },
             onExporterResult: handleExporterResult
         )
-        .confirmationDialog(
-            "Delete \"\(deleteVideoTarget?.displayName ?? "")\"?",
-            isPresented: $showDeleteVideoConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Delete Video & Moves", role: .destructive) {
-                if let v = deleteVideoTarget { deleteVideo(v) }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            if let video = deleteVideoTarget {
-                Text(deletionImpactMessage(for: video))
+        .sheet(item: $deleteVideoTarget) { video in
+            VideoDeleteSheet(video: video) { deleteVideo(video) }
+        }
+        .sheet(isPresented: $showStylePicker, onDismiss: handleStylePickerDismiss) {
+            StyleSelectionSheet(
+                context: .quickFilter,
+                styles: allStyles,
+                selectedStyleID: styleStore.activeStyle?.id,
+                onSelect: { style in
+                    styleFilterChoice = style.map(StyleFilterChoice.style) ?? .all
+                }
+            )
+        }
+        .sheet(item: $unlockPrompt, onDismiss: handleUnlockSheetDismiss) { reason in
+            UnlockPaywallSheet(reason: reason) {
+                unlockSucceeded = true
             }
         }
         .onAppear(perform: focusPendingArrival)
@@ -160,22 +181,31 @@ struct LibraryPaneView: View {
 
             Spacer()
 
-            HStack(spacing: Spacing.sm) {
-                if styleStore.activeStyle != nil {
-                    Circle()
-                        .fill(accentColor)
-                        .frame(width: 8, height: 8)
+            Button {
+                showStylePicker = true
+            } label: {
+                HStack(spacing: Spacing.sm) {
+                    if styleStore.activeStyle != nil {
+                        Circle()
+                            .fill(accentColor)
+                            .frame(width: 8, height: 8)
+                    }
+                    Text(styleStore.label)
+                        .font(.caption.weight(.bold))
+                    Image(systemName: "chevron.down")
+                        .font(.caption2.weight(.bold))
                 }
-                Text(styleStore.label)
-                    .font(.caption.weight(.bold))
+                .foregroundStyle(Theme.stagePrimary)
+                .padding(.horizontal, Spacing.md)
+                .frame(minHeight: Spacing.touchTarget)
+                .background(Theme.stageSurface, in: Capsule())
+                .overlay { Capsule().stroke(stageStroke, lineWidth: 1) }
+                .contentShape(Capsule())
             }
-            .foregroundStyle(Theme.stagePrimary)
-            .padding(.horizontal, Spacing.md)
-            .frame(minHeight: 36)
-            .background(Theme.stageSurface, in: Capsule())
-            .overlay { Capsule().stroke(stageStroke, lineWidth: 1) }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Style filter: \(styleStore.label)")
+            .buttonStyle(StageSelectableRowButtonStyle())
+            .accessibilityLabel("Style filter")
+            .accessibilityValue(styleStore.label)
+            .accessibilityHint("Opens the style picker")
         }
         .padding(.horizontal, Spacing.lg)
         .padding(.bottom, Spacing.md)
@@ -339,16 +369,11 @@ struct LibraryPaneView: View {
                 Button {
                     onSelectVideo(video)
                 } label: {
-                    HStack(spacing: Spacing.md) {
-                        VideoRowView(video: video)
-                        if video.id == activeVideoID {
-                            Image(systemName: "waveform")
-                                .font(.body.weight(.bold))
-                                .foregroundStyle(playbackAccent(for: video))
-                                .frame(minWidth: Spacing.touchTarget, minHeight: Spacing.touchTarget)
-                                .accessibilityHidden(true)
-                        }
-                    }
+                    VideoRowView(
+                        video: video,
+                        isPlaying: video.id == activeVideoID,
+                        accent: playbackAccent(for: video)
+                    )
                     .foregroundStyle(Theme.stagePrimary)
                     .padding(.horizontal, Spacing.md)
                     .padding(.vertical, Spacing.sm)
@@ -365,7 +390,6 @@ struct LibraryPaneView: View {
                 .accessibilityFocused($accessibilityFocus, equals: .video(video.id))
                 .accessibilityAction(named: "Delete") {
                     deleteVideoTarget = video
-                    showDeleteVideoConfirm = true
                 }
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.lg, bottom: Spacing.xs, trailing: Spacing.lg))
@@ -373,7 +397,6 @@ struct LibraryPaneView: View {
                 .swipeActions(edge: .trailing) {
                     Button {
                         deleteVideoTarget = video
-                        showDeleteVideoConfirm = true
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
@@ -504,21 +527,41 @@ struct LibraryPaneView: View {
     }
 
     private func deleteVideo(_ video: Video) {
-        let videoID = video.id
-        Task { await ThumbnailService.shared.clearCache(for: videoID) }
-        try? FileManager.default.removeItem(at: video.fileURL)
-        modelContext.delete(video)
-        Haptics.medium()
+        VideoDeletionService.delete(video, in: modelContext, unlockStore: unlockStore)
     }
 
-    private func deletionImpactMessage(for video: Video) -> String {
-        let namedMoveCount = video.moves.filter {
-            !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }.count
-        if namedMoveCount == 0 {
-            return "No named moves will be removed."
+    // MARK: - Quick style filter
+
+    private func handleStylePickerDismiss() {
+        guard let choice = styleFilterChoice else { return }
+        styleFilterChoice = nil
+        switch choice {
+        case .all:
+            applyStyleFilter(nil)
+        case .style(let style):
+            applyStyleFilter(style)
         }
-        return "This also removes \(namedMoveCount) named \(namedMoveCount == 1 ? "move" : "moves") saved in this video."
+    }
+
+    /// Same access gate the Styles tab uses — a style the free tier can't reach
+    /// routes to the canonical paywall instead of silently filtering.
+    private func applyStyleFilter(_ style: Style?) {
+        guard unlockStore.canUseStyle(style?.id) else {
+            pendingFilterStyle = style
+            unlockPrompt = .styleLimit
+            return
+        }
+        unlockStore.recordStyleUse(style?.id)
+        styleStore.activeStyle = style
+        Haptics.select()
+    }
+
+    private func handleUnlockSheetDismiss() {
+        guard unlockSucceeded else { return }
+        unlockSucceeded = false
+        let style = pendingFilterStyle
+        pendingFilterStyle = nil
+        applyStyleFilter(style)
     }
 
     // MARK: - Export

@@ -5,11 +5,6 @@ import PhotosUI
 import UIKit
 
 struct VideoFeedView: View {
-    private enum ImportSource {
-        case photos
-        case files
-    }
-
     private enum AccessibilityFocus: Hashable {
         case selectedResult
     }
@@ -54,9 +49,13 @@ struct VideoFeedView: View {
     // the global style mode can scope them.
     @State private var styleTagTargets: [Video] = []
     @State private var showStyleTagPrompt = false
+    @State private var styleTagChoice: Style?
 
-    // Add-video action sheet, presented by the Add button or Library import actions.
-    @State private var showAddVideoDialog = false
+    // Add-video sheet, presented by the Add button or Library import actions.
+    // The sheet only records a choice; `onDismiss` runs the one import path so
+    // the picker is never presented while a sheet is still on screen.
+    @State private var showAddVideoSheet = false
+    @State private var addVideoChoice: ImportSource?
     @State private var unlockPrompt: UnlockPromptReason?
     @State private var pendingImportSource: ImportSource?
     @State private var pendingStyleTagID: UUID?
@@ -213,29 +212,17 @@ struct VideoFeedView: View {
         } message: {
             Text(importError ?? "An unknown error occurred.")
         }
-        .confirmationDialog(
-            styleTagTargets.count > 1 ? "Tag \(styleTagTargets.count) videos" : "What style is this?",
-            isPresented: $showStyleTagPrompt,
-            titleVisibility: .visible
-        ) {
-            ForEach(allStyles) { style in
-                Button(style.name) { requestStyleForTargets(style) }
-            }
-            Button("Skip", role: .cancel) {
-                styleTagTargets = []
-                pendingStyleTagID = nil
-            }
-        } message: {
-            Text("Tagging keeps videos in the right style mode. You can change it later from the editor.")
+        .sheet(isPresented: $showStyleTagPrompt, onDismiss: handleStyleTagSheetDismiss) {
+            StyleSelectionSheet(
+                context: .tagImport(count: styleTagTargets.count),
+                styles: allStyles,
+                selectedStyleID: styleTagTargets.first?.style?.id,
+                onSelect: { styleTagChoice = $0 },
+                onSkip: { styleTagChoice = nil }
+            )
         }
-        .confirmationDialog(
-            "Add video",
-            isPresented: $showAddVideoDialog,
-            titleVisibility: .visible
-        ) {
-            Button("From Photos") { requestImport(.photos) }
-            Button("From Files")  { requestImport(.files) }
-            Button("Cancel", role: .cancel) {}
+        .sheet(isPresented: $showAddVideoSheet, onDismiss: handleAddVideoSheetDismiss) {
+            ImportSourceSheet { addVideoChoice = $0 }
         }
         .sheet(item: $unlockPrompt, onDismiss: handleUnlockSheetDismiss) { reason in
             UnlockPaywallSheet(reason: reason) {
@@ -273,7 +260,7 @@ struct VideoFeedView: View {
         }
         .onChange(of: router.addVideoRequestID, initial: true) { _, requestID in
             guard requestID != nil else { return }
-            showAddVideoDialog = true
+            showAddVideoSheet = true
             router.addVideoRequestID = nil
         }
         .onChange(of: selectedIndex) { _, _ in syncWindow(autoplay: true) }
@@ -1301,6 +1288,26 @@ struct VideoFeedView: View {
         if !styleTagTargets.isEmpty {
             showStyleTagPrompt = true
         }
+    }
+
+    /// Runs the chosen import *after* the Add Video sheet is gone, so the
+    /// Photos/Files picker (or the paywall) never races a dismissing sheet.
+    private func handleAddVideoSheetDismiss() {
+        guard let choice = addVideoChoice else { return }
+        addVideoChoice = nil
+        requestImport(choice)
+    }
+
+    /// Same deferral for style tagging: a blocked style has to open the paywall
+    /// once this sheet has finished dismissing. No choice means Skip.
+    private func handleStyleTagSheetDismiss() {
+        guard let style = styleTagChoice else {
+            styleTagTargets = []
+            pendingStyleTagID = nil
+            return
+        }
+        styleTagChoice = nil
+        requestStyleForTargets(style)
     }
 
     private func handleUnlockSheetDismiss() {

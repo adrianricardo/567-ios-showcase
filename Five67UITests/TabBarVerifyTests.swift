@@ -436,7 +436,11 @@ final class TabBarVerifyTests: XCTestCase {
         XCTAssertTrue(app.buttons["Salsa"].waitForExistence(timeout: 3))
         app.buttons["Salsa"].tap()
         tabBar.buttons["Library"].tap()
-        XCTAssertTrue(app.staticTexts["Style filter: Salsa"].waitForExistence(timeout: 3) || app.staticTexts["Salsa"].exists)
+        // The chip is now a button that opens the quick-style sheet; the active
+        // filter reads as its accessibility value.
+        let styleChip = app.buttons["Style filter"]
+        XCTAssertTrue(styleChip.waitForExistence(timeout: 3))
+        XCTAssertEqual(styleChip.value as? String, "Salsa")
 
         videos.tap()
         let firstVideo = app.buttons.matching(NSPredicate(format: "value == 'Playing'" )).firstMatch
@@ -552,6 +556,68 @@ final class TabBarVerifyTests: XCTestCase {
         completionAttachment.name = "final-practice-completion-return"
         completionAttachment.lifetime = .keepAlways
         add(completionAttachment)
+    }
+
+    /// The Library style chip is a quick picker, not a second Styles tab: it
+    /// shows the shared style rows, applies the filter, and stays in Library.
+    func testLibraryQuickStyleSheetFiltersWithoutLeavingLibrary() throws {
+        launchApp(additionalArguments: ["-Five67UITestSeedLibrary"])
+
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertTrue(tabBar.buttons["Library"].waitForExistence(timeout: 5))
+        tabBar.buttons["Library"].tap()
+
+        let chip = app.buttons["Style filter"]
+        XCTAssertTrue(chip.waitForExistence(timeout: 5))
+        chip.tap()
+
+        // "All styles" is the row this context adds on top of the shared list.
+        XCTAssertTrue(app.buttons["All styles"].waitForExistence(timeout: 3))
+        let salsa = app.buttons["Salsa"]
+        XCTAssertTrue(salsa.exists)
+        salsa.tap()
+
+        expectation(
+            for: NSPredicate(format: "value == 'Salsa'"),
+            evaluatedWith: chip
+        )
+        waitForExpectations(timeout: 5)
+        XCTAssertTrue(tabBar.buttons["Library"].isSelected, "Quick style selection must stay in Library")
+    }
+
+    /// Video deletion confirms in a contextual sheet that names the video and
+    /// its exact named-move impact — not a title-only popover.
+    func testLibraryVideoDeleteSheetShowsIdentityAndImpact() throws {
+        launchApp(additionalArguments: ["-Five67UITestSeedLibrary"])
+
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertTrue(tabBar.buttons["Library"].waitForExistence(timeout: 5))
+        tabBar.buttons["Library"].tap()
+
+        let videos = app.buttons["Videos"]
+        XCTAssertTrue(videos.waitForExistence(timeout: 5))
+        videos.tap()
+
+        let videoRow = app.buttons
+            .matching(NSPredicate(format: "label CONTAINS 'Studio 22 practice'"))
+            .firstMatch
+        XCTAssertTrue(videoRow.waitForExistence(timeout: 5))
+        videoRow.swipeLeft()
+
+        let deleteAction = app.buttons["Delete"]
+        XCTAssertTrue(deleteAction.waitForExistence(timeout: 3))
+        deleteAction.tap()
+
+        XCTAssertTrue(app.staticTexts["Delete this video?"].waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            app.staticTexts
+                .containing(NSPredicate(format: "label CONTAINS '2 named moves'"))
+                .firstMatch.exists,
+            "The sheet must state the exact named-move impact"
+        )
+
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(videoRow.waitForExistence(timeout: 3), "Cancel must leave the video in place")
     }
 
     func testPracticeDetailEmptyStateCapture() throws {

@@ -119,24 +119,25 @@ struct StylePickerPaneView: View {
     }
 
     private var allRow: some View {
-        StageSelectableRow(
-            title: "All styles",
-            isSelected: styleStore.activeStyle == nil,
-            action: { select(nil) }
+        StyleSelectionList(
+            styles: [],
+            selectedStyleID: styleStore.activeStyle?.id,
+            includesAllStyles: true,
+            onSelect: { _ in select(nil) }
         )
         .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.lg, bottom: Spacing.xs, trailing: Spacing.lg))
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
     }
 
+    /// The Styles tab keeps its own `List` so rows can carry swipe actions, but
+    /// renders the same `StyleSelectionList` row for a single style so the tab
+    /// and the two style sheets stay visually identical.
     private func styleRow(_ style: Style) -> some View {
-        let isActive = styleStore.activeStyle?.id == style.id
-        let accent = StyleAccentPalette.accent(forName: style.name, id: style.id)?.color
-        return StageSelectableRow(
-            title: style.name,
-            identityColor: accent,
-            isSelected: isActive,
-            action: { select(style) }
+        StyleSelectionList(
+            styles: [style],
+            selectedStyleID: styleStore.activeStyle?.id,
+            onSelect: { _ in select(style) }
         )
         .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.lg, bottom: Spacing.xs, trailing: Spacing.lg))
         .listRowSeparator(.hidden)

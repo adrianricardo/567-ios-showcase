@@ -3,11 +3,20 @@ import AVFoundation
 
 struct VideoRowView: View {
     let video: Video
-    @State private var thumbnail: UIImage?
+    /// Drawn as an overlay on the thumbnail rather than a trailing icon, so the
+    /// row's action area stays free.
+    var isPlaying = false
+    var accent: Color = Theme.stagePrimary
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            thumbnailView
+            StageThumbnailView(
+                videoID: video.id,
+                fileURL: video.fileURL,
+                size: CGSize(width: 64, height: 44),
+                isPlaying: isPlaying,
+                accent: accent
+            )
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text(video.displayName)
                     .font(.body)
@@ -19,24 +28,6 @@ struct VideoRowView: View {
             Spacer(minLength: 0)
         }
         .frame(minHeight: Spacing.rowMinHeight)
-        .task { await loadThumbnail() }
-    }
-
-    private var thumbnailView: some View {
-        Group {
-            if let img = thumbnail {
-                Image(uiImage: img)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                Rectangle()
-                    .fill(Theme.stageRaisedSurface)
-                    .overlay(Image(systemName: "film").foregroundStyle(Theme.stageSecondary))
-            }
-        }
-        .frame(width: 64, height: 44)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .accessibilityHidden(true)
     }
 
     private var subtitleText: String {
@@ -44,15 +35,6 @@ struct VideoRowView: View {
         let moveStr = count == 1 ? "1 move" : "\(count) moves"
         let age = video.importedAt.relativeDescription
         return "\(moveStr) · \(age)"
-    }
-
-    private func loadThumbnail() async {
-        thumbnail = await ThumbnailService.shared.thumbnail(
-            for: video.fileURL,
-            at: 0,
-            videoID: video.id,
-            height: 44
-        )
     }
 }
 

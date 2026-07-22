@@ -111,17 +111,8 @@ struct VideoDetailView: View {
                     unlockSucceeded = true
                 }
             }
-            .confirmationDialog(
-                "Delete \"\(video.displayName)\"?",
-                isPresented: $showDeleteConfirm,
-                titleVisibility: .visible
-            ) {
-                Button("Delete Video & All Moves", role: .destructive) {
-                    deleteCurrentVideo()
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text(deletionImpactMessage)
+            .sheet(isPresented: $showDeleteConfirm) {
+                VideoDeleteSheet(video: video) { deleteCurrentVideo() }
             }
             .preferredColorScheme(.dark)
     }
@@ -256,16 +247,6 @@ struct VideoDetailView: View {
         applyPendingStyle()
     }
 
-    private var deletionImpactMessage: String {
-        let namedMoveCount = video.moves.filter {
-            !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }.count
-        if namedMoveCount == 0 {
-            return "No named moves will be removed."
-        }
-        return "This also removes \(namedMoveCount) named \(namedMoveCount == 1 ? "move" : "moves") saved in this video."
-    }
-
     @ViewBuilder
     private var contentList: some View {
         if hasMoves {
@@ -279,8 +260,7 @@ struct VideoDetailView: View {
                         onRename: { newName in renameMove(move, to: newName) },
                         onExclude: { toggleExclude(move) },
                         accentColor: styleAccent,
-                        activeForegroundColor: Theme.stagePrimary,
-                        showsInlineRename: false
+                        activeForegroundColor: Theme.stagePrimary
                     )
                     .id(move.id)
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -392,12 +372,8 @@ struct VideoDetailView: View {
     }
 
     private func deleteCurrentVideo() {
-        let videoID = video.id
-        Task { await ThumbnailService.shared.clearCache(for: videoID) }
-        try? FileManager.default.removeItem(at: video.fileURL)
-        modelContext.delete(video)
+        VideoDeletionService.delete(video, in: modelContext, unlockStore: unlockStore)
         dismiss()
-        Haptics.medium()
     }
 
     private func finishEditing() {

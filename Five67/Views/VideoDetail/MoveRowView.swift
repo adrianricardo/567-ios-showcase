@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 struct MoveRowView: View {
     let move: Move
@@ -10,10 +9,8 @@ struct MoveRowView: View {
     let onExclude: () -> Void
     let accentColor: Color
     let activeForegroundColor: Color?
-    let showsInlineRename: Bool
 
     @State private var showRename = false
-    @State private var thumbnail: UIImage?
 
     init(
         move: Move,
@@ -23,8 +20,7 @@ struct MoveRowView: View {
         onRename: @escaping (String) -> Void,
         onExclude: @escaping () -> Void,
         accentColor: Color = Color.accentColor,
-        activeForegroundColor: Color? = nil,
-        showsInlineRename: Bool = true
+        activeForegroundColor: Color? = nil
     ) {
         self.move = move
         self.isActive = isActive
@@ -34,7 +30,6 @@ struct MoveRowView: View {
         self.onExclude = onExclude
         self.accentColor = accentColor
         self.activeForegroundColor = activeForegroundColor
-        self.showsInlineRename = showsInlineRename
     }
 
     private var primaryForeground: Color {
@@ -56,16 +51,18 @@ struct MoveRowView: View {
         move.name.isEmpty && !move.isExcluded
     }
 
-    private var thumbnailTaskID: String {
-        guard let video = move.video else { return "missing-\(move.id.uuidString)" }
-        return "\(video.id.uuidString)-\(move.time)-\(video.localFilename)"
-    }
-
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: Spacing.md) {
-                thumbnailView
-                    .padding(.leading, Spacing.lg)
+                StageThumbnailView(
+                    videoID: move.video?.id,
+                    fileURL: move.video?.fileURL,
+                    time: move.time,
+                    size: CGSize(width: 54, height: 40),
+                    isPlaying: isActive,
+                    accent: accentColor
+                )
+                .padding(.leading, Spacing.lg)
 
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text(displayName)
@@ -80,7 +77,7 @@ struct MoveRowView: View {
 
                 Spacer(minLength: Spacing.sm)
 
-                if showAddName && showsInlineRename {
+                if showAddName {
                     Button {
                         showRename = true
                     } label: {
@@ -95,14 +92,6 @@ struct MoveRowView: View {
                             .background(Capsule().fill(Theme.secondaryChipFill))
                     }
                     .buttonStyle(.plain)
-                }
-
-                if isActive {
-                    Image(systemName: "waveform")
-                        .font(.body.weight(.bold))
-                        .foregroundStyle(accentColor)
-                        .frame(minWidth: Spacing.touchTarget, minHeight: Spacing.touchTarget)
-                        .accessibilityHidden(true)
                 }
             }
             .padding(.trailing, Spacing.lg)
@@ -123,7 +112,6 @@ struct MoveRowView: View {
             onDelete()
         }
         .opacity(move.isExcluded ? 0.5 : 1)
-        .task(id: thumbnailTaskID) { await loadThumbnail() }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
                 onExclude()
@@ -136,9 +124,13 @@ struct MoveRowView: View {
             .tint(move.isExcluded ? .blue : .gray)
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button(role: .destructive, action: onDelete) {
+            // Explicit red tint instead of `role: .destructive` — on iOS 26 the
+            // role alone renders the trash glyph white on a white swipe
+            // background, leaving the action invisible.
+            Button(action: onDelete) {
                 Label("Delete", systemImage: "trash")
             }
+            .tint(.red)
         }
         .contextMenu {
             Button("Rename", systemImage: "pencil") {
@@ -166,32 +158,4 @@ struct MoveRowView: View {
         }
     }
 
-    private var thumbnailView: some View {
-        Group {
-            if let thumbnail {
-                Image(uiImage: thumbnail)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                Rectangle()
-                    .fill(Color(.systemGray5))
-                    .overlay(Image(systemName: "film").foregroundStyle(.secondary))
-            }
-        }
-        .frame(width: 54, height: 40)
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-    }
-
-    private func loadThumbnail() async {
-        guard let video = move.video else {
-            thumbnail = nil
-            return
-        }
-        thumbnail = await ThumbnailService.shared.thumbnail(
-            for: video.fileURL,
-            at: move.time,
-            videoID: video.id,
-            height: 40
-        )
-    }
 }
