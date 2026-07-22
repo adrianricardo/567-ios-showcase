@@ -3,18 +3,18 @@ import Testing
 @testable import Five67
 
 struct AccessPolicyTests {
-    @Test func freeVideoImportsStopExactlyAtTen() {
+    @Test func freePersonalVideoImportsStopExactlyAtThree() {
         let scenarios = [
-            (current: 0, requested: 10, allowed: 10, prompts: false),
-            (current: 9, requested: 1, allowed: 1, prompts: false),
-            (current: 9, requested: 3, allowed: 1, prompts: true),
-            (current: 10, requested: 1, allowed: 0, prompts: true),
-            (current: 12, requested: 1, allowed: 0, prompts: true)
+            (current: 0, requested: 3, allowed: 3, prompts: false),
+            (current: 2, requested: 1, allowed: 1, prompts: false),
+            (current: 2, requested: 3, allowed: 1, prompts: true),
+            (current: 3, requested: 1, allowed: 0, prompts: true),
+            (current: 5, requested: 1, allowed: 0, prompts: true)
         ]
         for scenario in scenarios {
             let result = AccessPolicy.videoImportAllowance(
                 accessLevel: .free,
-                currentVideoCount: scenario.current,
+                personalVideoCount: scenario.current,
                 requestedCount: scenario.requested
             )
 
@@ -27,7 +27,7 @@ struct AccessPolicyTests {
         for level in [AccessLevel.paid, .legacy] {
             let result = AccessPolicy.videoImportAllowance(
                 accessLevel: level,
-                currentVideoCount: 10,
+                personalVideoCount: 3,
                 requestedCount: 4
             )
 
@@ -104,6 +104,53 @@ struct AccessPolicyTests {
                 originalBuildVersion: "1.0"
             )
         ))
+    }
+
+    @Test func personalVideoCountExcludesDemoRows() {
+        let personalA = Video(displayName: "A", localFilename: "a.mov", duration: 1)
+        let demo = Video(displayName: "Demo", localFilename: "demo.mov", duration: 1, isDemo: true)
+        let personalB = Video(displayName: "B", localFilename: "b.mov", duration: 1)
+        let all = [personalA, demo, personalB]
+
+        #expect(all.personalVideoCount == 2)
+        #expect(all.personalVideos.count == 2)
+        #expect(!all.personalVideos.contains { $0.isDemo })
+    }
+
+    @Test @MainActor func clearingLastPersonalVideoResetsFreeStyleClaim() throws {
+        let suiteName = "AccessPolicyClaimReset-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let salsa = UUID()
+
+        let store = UnlockStore(defaults: defaults)
+        store.recordStyleUse(salsa)
+        #expect(store.claimedFreeStyleID == salsa)
+
+        // A demo-only library (personal count 0 because demo is excluded by the
+        // caller) or a fully cleared library resets the claim.
+        store.recountPersonalVideos(1)
+        #expect(store.claimedFreeStyleID == salsa)
+
+        store.recountPersonalVideos(0)
+        #expect(store.claimedFreeStyleID == nil)
+        #expect(store.canUseStyle(UUID()))
+        #expect(UnlockStore(defaults: defaults).claimedFreeStyleID == nil)
+    }
+
+    @Test @MainActor func firstPersonalStyleSucceedsAndSecondRequiresUnlock() throws {
+        let suiteName = "AccessPolicySecondStyle-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let salsa = UUID()
+        let bachata = UUID()
+
+        let store = UnlockStore(defaults: defaults)
+        #expect(store.canUseStyle(salsa))
+        store.recordStyleUse(salsa)
+
+        #expect(store.canUseStyle(salsa))
+        #expect(!store.canUseStyle(bachata))
     }
 
     @Test @MainActor func claimedFreeStylePersistsAcrossStoreRelaunch() throws {

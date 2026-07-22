@@ -86,8 +86,13 @@ struct ExportManifest: Codable {
 actor LibraryExporter {
 
     func export(includeVideos: Bool = true) async throws -> LibraryExportResult {
-        let videos = try modelContext.fetch(FetchDescriptor<Video>())
+        // Demo content is never part of a user's library export. Its rows and
+        // its on-disk file are excluded from DTOs, integrity totals, and copies.
+        let allVideos = try modelContext.fetch(FetchDescriptor<Video>())
+        let videos = allVideos.filter { !$0.isDemo }
+        let demoFilenames = Set(allVideos.filter { $0.isDemo }.map(\.localFilename))
         let moves = try modelContext.fetch(FetchDescriptor<Move>())
+            .filter { $0.video?.isDemo != true }
 
         let fm = FileManager.default
         let documentsDir = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -141,6 +146,7 @@ actor LibraryExporter {
             .sorted()
         let orphanFiles = onDiskFilenames
             .subtracting(referencedFilenames)
+            .subtracting(demoFilenames)
             .sorted()
         let orphanMoveCount = moveDTOs.filter { $0.videoID == nil }.count
 

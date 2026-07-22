@@ -34,7 +34,7 @@ enum UnlockPromptReason: String, Identifiable {
         case .onboarding, .durableEntry:
             "Unlock unlimited videos and styles — no subscription, ever."
         case .videoLimit:
-            "Your free library includes 10 videos. Unlock unlimited videos and styles."
+            "Your free library includes 3 videos. Unlock unlimited videos and styles."
         case .styleLimit:
             "Your free library includes one dance style. Unlock every style and keep your choice."
         }
@@ -72,7 +72,9 @@ struct UnlockPurchaseResolution: Equatable {
 }
 
 enum AccessPolicy {
-    static let freeVideoLimit = 10
+    /// Free installs may keep this many **personal** videos. The bundled demo
+    /// never counts toward it.
+    static let freeVideoLimit = 3
 
     // v1.0 was the last unlimited release. Its final repository state was build
     // 52; the shipping binary was built earlier, so <= 52 safely includes every
@@ -81,7 +83,7 @@ enum AccessPolicy {
 
     static func videoImportAllowance(
         accessLevel: AccessLevel,
-        currentVideoCount: Int,
+        personalVideoCount: Int,
         requestedCount: Int
     ) -> VideoImportAllowance {
         guard requestedCount > 0 else {
@@ -91,7 +93,7 @@ enum AccessPolicy {
             return VideoImportAllowance(allowedCount: requestedCount, requiresUnlock: false)
         }
 
-        let remaining = max(0, freeVideoLimit - currentVideoCount)
+        let remaining = max(0, freeVideoLimit - personalVideoCount)
         return VideoImportAllowance(
             allowedCount: min(remaining, requestedCount),
             requiresUnlock: requestedCount > remaining

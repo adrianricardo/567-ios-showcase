@@ -104,10 +104,10 @@ enum UnlockProduct {
         }
     }
 
-    func videoImportAllowance(currentVideoCount: Int, requestedCount: Int) -> VideoImportAllowance {
+    func videoImportAllowance(personalVideoCount: Int, requestedCount: Int) -> VideoImportAllowance {
         AccessPolicy.videoImportAllowance(
             accessLevel: accessLevel,
-            currentVideoCount: currentVideoCount,
+            personalVideoCount: personalVideoCount,
             requestedCount: requestedCount
         )
     }
@@ -124,6 +124,17 @@ enum UnlockProduct {
         guard accessLevel == .free, claimedFreeStyleID == nil, let styleID else { return }
         claimedFreeStyleID = styleID
         defaults.set(styleID.uuidString, forKey: Keys.claimedFreeStyleID)
+    }
+
+    /// Keeps the free-style claim in sync with the personal library. When the
+    /// last personal video is removed the claim is cleared, so the next styled
+    /// personal video establishes a fresh free style. Demo content is excluded
+    /// from `personalVideoCount` by callers, so it can never hold the claim open.
+    func recountPersonalVideos(_ personalVideoCount: Int) {
+        guard personalVideoCount == 0 else { return }
+        guard claimedFreeStyleID != nil else { return }
+        claimedFreeStyleID = nil
+        defaults.removeObject(forKey: Keys.claimedFreeStyleID)
     }
 
     func loadProduct() async {

@@ -9,6 +9,10 @@ import SwiftData
     var importedAt: Date
     var recordedAt: Date?
     var duration: TimeInterval
+    /// True only for the bundled onboarding demo clip. Demo rows are excluded
+    /// from free-video counts, free-style claims, legacy grandfathering, and
+    /// library exports. Added in schema V5; existing rows migrate as `false`.
+    var isDemo: Bool = false
     var style: Style?
     @Relationship(deleteRule: .cascade) var moves: [Move] = []
 
@@ -20,6 +24,7 @@ import SwiftData
         importedAt: Date = Date(),
         recordedAt: Date? = nil,
         duration: TimeInterval,
+        isDemo: Bool = false,
         style: Style? = nil
     ) {
         self.id = id
@@ -29,6 +34,7 @@ import SwiftData
         self.importedAt = importedAt
         self.recordedAt = recordedAt
         self.duration = duration
+        self.isDemo = isDemo
         self.style = style
     }
 }
@@ -42,5 +48,19 @@ extension Video {
 
     var movesSorted: [Move] {
         moves.sorted { $0.time < $1.time }
+    }
+}
+
+extension Sequence where Element == Video {
+    /// Personal (non-demo) videos. The single canonical filter — never scatter
+    /// `!isDemo` across views. Free-video cap and free-style logic count these.
+    var personalVideos: [Video] {
+        filter { !$0.isDemo }
+    }
+
+    var personalVideoCount: Int {
+        reduce(into: 0) { count, video in
+            if !video.isDemo { count += 1 }
+        }
     }
 }

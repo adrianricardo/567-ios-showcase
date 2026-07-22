@@ -1182,7 +1182,7 @@ struct VideoFeedView: View {
         defer { isImporting = false }
 
         let allowance = unlockStore.videoImportAllowance(
-            currentVideoCount: allVideos.count,
+            personalVideoCount: allVideos.personalVideoCount,
             requestedCount: items.count
         )
         var firstError: String?
@@ -1215,7 +1215,7 @@ struct VideoFeedView: View {
         defer { isImporting = false }
 
         let allowance = unlockStore.videoImportAllowance(
-            currentVideoCount: allVideos.count,
+            personalVideoCount: allVideos.personalVideoCount,
             requestedCount: urls.count
         )
         var firstError: String?
@@ -1265,7 +1265,7 @@ struct VideoFeedView: View {
 
     private func requestImport(_ source: ImportSource) {
         let allowance = unlockStore.videoImportAllowance(
-            currentVideoCount: allVideos.count,
+            personalVideoCount: allVideos.personalVideoCount,
             requestedCount: 1
         )
         guard allowance.allowedCount == 1 else {

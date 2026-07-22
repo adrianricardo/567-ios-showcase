@@ -1,5 +1,13 @@
 import XCTest
 
+/// Mirrors `AccessPolicy.freeVideoLimit`. The UI test target can't import the
+/// app target, so this constant must be updated whenever the policy changes.
+private let freeVideoLimit = 3
+
+/// `-Five67UITestAboveVideoCapFixture` seeds `freeVideoLimit + 2` videos. Row 1
+/// is "Studio 22 practice"; rows 2...n are "Practice video n".
+private let aboveCapLastVideoLabel = "Practice video \(freeVideoLimit + 2)"
+
 @MainActor
 final class TabBarVerifyTests: XCTestCase {
     var app: XCUIApplication!
@@ -243,7 +251,9 @@ final class TabBarVerifyTests: XCTestCase {
         XCTAssertTrue(dialogAppeared, "Add video dialog did not appear")
     }
 
-    func testFreeVideoElevenPresentsPaywallWithoutOpeningPicker() throws {
+    /// At the cap (3 personal videos) the next import must present the paywall
+    /// instead of opening the picker.
+    func testFreeVideoOverCapPresentsPaywallWithoutOpeningPicker() throws {
         launchApp(additionalArguments: ["-Five67UITestVideoCapFixture"])
 
         let addButton = app.buttons["Add video"]
@@ -254,7 +264,7 @@ final class TabBarVerifyTests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["Keep building your library."].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts[
-            "Your free library includes 10 videos. Unlock unlimited videos and styles."
+            "Your free library includes \(freeVideoLimit) videos. Unlock unlimited videos and styles."
         ].exists)
     }
 
@@ -267,14 +277,14 @@ final class TabBarVerifyTests: XCTestCase {
         XCTAssertTrue(app.buttons["Videos"].waitForExistence(timeout: 3))
         app.buttons["Videos"].tap()
 
-        let twelfthVideo = app.buttons.matching(
-            NSPredicate(format: "label CONTAINS 'Practice video 12'")
+        let lastVideo = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS %@", aboveCapLastVideoLabel)
         ).firstMatch
-        for _ in 0..<8 where !twelfthVideo.exists {
+        for _ in 0..<8 where !lastVideo.exists {
             app.swipeUp()
         }
         XCTAssertTrue(
-            twelfthVideo.waitForExistence(timeout: 3),
+            lastVideo.waitForExistence(timeout: 3),
             "A free library already above the cap must keep all existing videos accessible."
         )
 
@@ -290,11 +300,11 @@ final class TabBarVerifyTests: XCTestCase {
         tabBar.buttons["Library"].tap()
         XCTAssertTrue(app.buttons["Videos"].waitForExistence(timeout: 3))
         app.buttons["Videos"].tap()
-        for _ in 0..<8 where !twelfthVideo.exists {
+        for _ in 0..<8 where !lastVideo.exists {
             app.swipeUp()
         }
         XCTAssertTrue(
-            twelfthVideo.waitForExistence(timeout: 3),
+            lastVideo.waitForExistence(timeout: 3),
             "Dismissing the cap paywall must leave the above-cap library unchanged."
         )
     }

@@ -27,6 +27,15 @@ import Testing
 /// **If you bump to V5 (or any future schema):** revisit these tests. Either
 /// fix V3→V4 first (intermediate V3.5 schema that drops the scalar before V4
 /// adds the relationship), or explicitly re-affirm the risk acceptance here.
+///
+/// ## V5 bump (2026-07-21) — risk re-affirmed
+///
+/// V5 adds the non-optional `Video.isDemo` (default `false`) via a pure
+/// lightweight column add on top of V4. It does not touch the broken V3→V4
+/// stage. V3 TestFlight exposure remains believed zero, so the risk acceptance
+/// above stands unchanged; the `withKnownIssue` wrappers on V1/V2/V3 paths stay.
+/// The V4→V5 stage — the one every current install actually traverses — is
+/// covered by `v4_store_upgrades_to_v5_marking_all_videos_non_demo` below.
 struct MigrationTests {
 
     // MARK: - V1 → V4 (touches broken V3→V4 stage)
@@ -177,6 +186,42 @@ struct MigrationTests {
         }
     }
 
+    // MARK: - V4 → V5 (the stage every current install traverses)
+
+    /// V5 adds `Video.isDemo`. Every pre-existing row must migrate as personal
+    /// content (`isDemo == false`) with its style relationship intact.
+    @Test func v4_store_upgrades_to_v5_marking_all_videos_non_demo() throws {
+        let storeURL = try Harness.makeTempStoreURL()
+        let videoID = UUID()
+
+        try Harness.withV4Container(at: storeURL) { context in
+            let style = SchemaV4.Style(
+                id: Style.Default.salsa,
+                name: "Salsa",
+                isDefault: true
+            )
+            context.insert(style)
+            let video = SchemaV4.Video(
+                id: videoID,
+                displayName: "Existing clip",
+                localFilename: "e.mov",
+                duration: 10,
+                style: style
+            )
+            context.insert(video)
+            try context.save()
+        }
+
+        try Harness.withLiveContainer(at: storeURL) { context in
+            let videos = try context.fetch(FetchDescriptor<Video>())
+            #expect(videos.count == 1)
+            let v = try #require(videos.first)
+            #expect(v.id == videoID)
+            #expect(v.isDemo == false)
+            #expect(v.style?.id == Style.Default.salsa)
+        }
+    }
+
     // MARK: - Working paths (V4-only — what TestFlight users actually exercise)
 
     /// Fresh-install path: app creates a brand-new V4 store. This is what every
@@ -304,6 +349,15 @@ private enum Harness {
     static func withV3Container(at url: URL, _ work: (ModelContext) throws -> Void) throws {
         try withContainer(
             schema: Schema(versionedSchema: SchemaV3.self),
+            url: url,
+            migrationPlan: nil,
+            work: work
+        )
+    }
+
+    static func withV4Container(at url: URL, _ work: (ModelContext) throws -> Void) throws {
+        try withContainer(
+            schema: Schema(versionedSchema: SchemaV4.self),
             url: url,
             migrationPlan: nil,
             work: work
