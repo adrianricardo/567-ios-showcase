@@ -121,7 +121,7 @@ struct LibraryPaneView: View {
     }
 
     private var stageStroke: Color {
-        colorSchemeContrast == .increased ? Theme.stageSecondary.opacity(0.5) : Theme.stageStroke
+        Theme.stageBoundary(colorSchemeContrast)
     }
 
     var body: some View {

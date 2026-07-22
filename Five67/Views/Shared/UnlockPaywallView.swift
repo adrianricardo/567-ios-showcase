@@ -16,29 +16,30 @@ struct UnlockPaywallView: View {
     let onSecondary: () -> Void
 
     var body: some View {
-        VStack(spacing: Spacing.xl4) {
-            VStack(spacing: Spacing.md) {
-                Text(reason.title)
+        VStack(alignment: .leading, spacing: Spacing.xl4) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                Text("Unlock unlimited videos & styles.")
                     .font(.largeTitle.weight(.heavy))
-                    .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(reason.subtitle)
+                Text(reason.explanation)
                     .font(.body)
                     .foregroundStyle(Theme.stageSecondary)
-                    .multilineTextAlignment(.center)
-            }
-
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                BulletLine("∞ Unlimited videos")
-                BulletLine("🎨 Unlimited styles")
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(Spacing.lg)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.stageSurface))
-            .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Theme.stageStroke, lineWidth: 1)
+
+            // Open rows: no enclosing card, no strokes — the type carries it.
+            VStack(alignment: .leading, spacing: Spacing.lg) {
+                benefitRow(
+                    "Unlimited videos",
+                    "Keep every class you film, not just your first few."
+                )
+                benefitRow(
+                    "Unlimited dance styles",
+                    "Tag each video with the style it actually belongs to."
+                )
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             statusMessages
 
@@ -78,13 +79,26 @@ struct UnlockPaywallView: View {
         }
     }
 
+    private func benefitRow(_ title: String, _ detail: String) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Text(title)
+                .font(.title3.weight(.bold))
+            Text(detail)
+                .font(.subheadline)
+                .foregroundStyle(Theme.stageSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
     @ViewBuilder
     private var statusMessages: some View {
         if let message = unlockStore.productLoadMessage {
             Text(message)
                 .font(.footnote)
                 .foregroundStyle(Theme.stageSecondary)
-                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
                 .accessibilityLabel(message)
                 .accessibilityFocused($statusFocus, equals: .product)
         }
@@ -93,7 +107,7 @@ struct UnlockPaywallView: View {
             Text(message)
                 .font(.footnote)
                 .foregroundStyle(Theme.stageSecondary)
-                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
                 .accessibilityLabel(message)
                 .accessibilityFocused($statusFocus, equals: .purchase)
         }
@@ -102,8 +116,10 @@ struct UnlockPaywallView: View {
     private var unlockButtonTitle: String {
         if unlockStore.isPurchasing { return "Unlocking..." }
         if unlockStore.isLoadingProduct { return "Loading unlock..." }
+        // Never invent a price: without a loaded product there is nothing
+        // honest to put after "Pay once".
         guard let displayPrice = unlockStore.displayPrice else { return "Unlock unavailable" }
-        return "Unlock 567 — \(displayPrice)"
+        return "Pay once — \(displayPrice)"
     }
 
     private func purchase() async {

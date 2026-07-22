@@ -600,20 +600,3 @@ private struct OnboardingResultReveal: View {
         }
     }
 }
-
-struct BulletLine: View {
-    let text: String
-
-    init(_ text: String) {
-        self.text = text
-    }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: Spacing.sm) {
-            Text("•")
-            Text(text)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .font(.body)
-    }
-}

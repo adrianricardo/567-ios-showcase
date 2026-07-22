@@ -6,6 +6,10 @@ private let freeVideoLimit = 3
 
 /// `-Five67UITestAboveVideoCapFixture` seeds `freeVideoLimit + 2` videos. Row 1
 /// is "Studio 22 practice"; rows 2...n are "Practice video n".
+/// The universal, feature-led paywall headline. `UnlockPromptReason` now only
+/// supplies the explanatory line beneath it.
+private let paywallHeadline = "Unlock unlimited videos & styles."
+
 private let aboveCapLastVideoLabel = "Practice video \(freeVideoLimit + 2)"
 
 @MainActor
@@ -276,10 +280,12 @@ final class TabBarVerifyTests: XCTestCase {
         XCTAssertTrue(app.buttons["From Photos"].waitForExistence(timeout: 3))
         app.buttons["From Photos"].tap()
 
-        XCTAssertTrue(app.staticTexts["Keep building your library."].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts[
-            "Your free library includes \(freeVideoLimit) videos. Unlock unlimited videos and styles."
-        ].exists)
+        XCTAssertTrue(
+            app.staticTexts[paywallHeadline].waitForExistence(timeout: 5)
+        )
+        XCTAssertTrue(
+            app.staticTexts["Your free library includes \(freeVideoLimit) videos."].exists
+        )
     }
 
     func testFreeAboveCapLibraryRemainsAccessibleAndBlocksOnlyAddition() throws {
@@ -307,7 +313,7 @@ final class TabBarVerifyTests: XCTestCase {
         addButton.tap()
         XCTAssertTrue(app.buttons["From Photos"].waitForExistence(timeout: 3))
         app.buttons["From Photos"].tap()
-        XCTAssertTrue(app.staticTexts["Keep building your library."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts[paywallHeadline].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Not now"].exists)
         app.buttons["Not now"].tap()
         XCTAssertTrue(tabBar.buttons["Library"].waitForExistence(timeout: 3))
@@ -335,7 +341,10 @@ final class TabBarVerifyTests: XCTestCase {
         XCTAssertTrue(app.buttons["Bachata"].waitForExistence(timeout: 3))
         app.buttons["Bachata"].tap()
 
-        XCTAssertTrue(app.staticTexts["Unlock your second style?"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts[paywallHeadline].waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            app.staticTexts["Your free library includes one dance style."].exists
+        )
         XCTAssertTrue(app.buttons["Not now"].exists)
         app.buttons["Not now"].tap()
         XCTAssertTrue(app.staticTexts["Styles"].waitForExistence(timeout: 5))

@@ -15,6 +15,7 @@ struct StylePickerPaneView: View {
     @Environment(StyleStore.self) private var styleStore
     @Environment(AppRouter.self) private var router
     @Environment(UnlockStore.self) private var unlockStore
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
 
     @Query(sort: \Style.createdAt, order: .forward)
     private var styles: [Style]
@@ -181,7 +182,7 @@ struct StylePickerPaneView: View {
             .background(Theme.stageSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Theme.stageStroke, lineWidth: 1)
+                    .stroke(Theme.stageBoundary(colorSchemeContrast), lineWidth: 1)
             }
             .contentShape(Rectangle())
         }

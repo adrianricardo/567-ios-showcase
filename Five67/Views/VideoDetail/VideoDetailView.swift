@@ -71,7 +71,7 @@ struct VideoDetailView: View {
     }
 
     private var stageStroke: Color {
-        colorSchemeContrast == .increased ? Theme.stageSecondary.opacity(0.6) : Theme.stageStroke
+        Theme.stageBoundary(colorSchemeContrast)
     }
 
     var body: some View {

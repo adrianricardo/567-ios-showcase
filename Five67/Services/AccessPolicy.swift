@@ -18,25 +18,17 @@ enum UnlockPromptReason: String, Identifiable {
 
     var id: String { rawValue }
 
-    var title: String {
+    /// Why *this* user is seeing the paywall. The headline is universal and
+    /// owned by `UnlockPaywallView`; only this reason-specific line varies, and
+    /// it reads below the headline.
+    var explanation: String {
         switch self {
         case .onboarding, .durableEntry:
-            "Pay once. Yours forever."
+            "One payment. No subscription, ever."
         case .videoLimit:
-            "Keep building your library."
+            "Your free library includes \(AccessPolicy.freeVideoLimit) videos."
         case .styleLimit:
-            "Unlock your second style?"
-        }
-    }
-
-    var subtitle: String {
-        switch self {
-        case .onboarding, .durableEntry:
-            "Unlock unlimited videos and styles — no subscription, ever."
-        case .videoLimit:
-            "Your free library includes 3 videos. Unlock unlimited videos and styles."
-        case .styleLimit:
-            "Your free library includes one dance style. Unlock every style and keep your choice."
+            "Your free library includes one dance style."
         }
     }
 }

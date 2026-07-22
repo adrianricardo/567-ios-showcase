@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import Five67
 
@@ -136,6 +137,38 @@ struct OnboardingTests {
         for accent in StyleAccentPalette.approved {
             #expect(StagePalette.contrastRatio(StagePalette.ink, accent.rgb) >= 4.5)
         }
+    }
+
+    /// The Quiet Stage neutrals must stay neutral: every channel equal, so no
+    /// warm cast competes with the style accents, which are the only color the
+    /// app is allowed to spend.
+    @Test func quiet_stage_neutrals_carry_no_color_cast() {
+        let neutrals: [(String, UInt32)] = [
+            ("background", StagePalette.background),
+            ("surface", StagePalette.surface),
+            ("raisedSurface", StagePalette.raisedSurface),
+            ("primary", StagePalette.primary),
+            ("secondary", StagePalette.secondary),
+            ("actionSurface", StagePalette.actionSurface),
+            ("ink", StagePalette.ink)
+        ]
+
+        for (name, rgb) in neutrals {
+            let red = (rgb >> 16) & 0xFF
+            let green = (rgb >> 8) & 0xFF
+            let blue = rgb & 0xFF
+            #expect(red == green && green == blue, "\(name) is not a pure neutral")
+        }
+    }
+
+    /// Routine hairlines were removed in P5, which makes the Increase Contrast
+    /// branch load-bearing: it is now the *only* thing that draws a boundary.
+    /// The simulator's `simctl ui increase_contrast` toggle does not propagate
+    /// to app rendering (verified 2026-07-21), so this locks the token logic and
+    /// the on-device check stays on the punch list.
+    @Test func stage_boundary_is_drawn_only_under_increased_contrast() {
+        #expect(Theme.stageBoundary(.standard) == Color.clear)
+        #expect(Theme.stageBoundary(.increased) != Color.clear)
     }
 }
 

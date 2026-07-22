@@ -18,10 +18,10 @@ enum StagePalette {
     static let background: UInt32 = 0x070707
     static let surface: UInt32 = 0x1B1B1B
     static let raisedSurface: UInt32 = 0x252525
-    static let primary: UInt32 = 0xF7F3E9
-    static let secondary: UInt32 = 0xB8B1A7
-    static let actionSurface: UInt32 = 0xFFFDF7
-    static let ink: UInt32 = 0x10100F
+    static let primary: UInt32 = 0xF2F2F2
+    static let secondary: UInt32 = 0xB0B0B0
+    static let actionSurface: UInt32 = 0xFFFFFF
+    static let ink: UInt32 = 0x101010
 
     static func color(_ rgb: UInt32) -> Color {
         Color(
@@ -116,11 +116,19 @@ enum Theme {
     static let stageRaisedSurface = StagePalette.color(StagePalette.raisedSurface)
     static let stagePrimary = StagePalette.color(StagePalette.primary)
     static let stageSecondary = StagePalette.color(StagePalette.secondary)
-    /// Warm white is reserved for the screen's one primary action. Selection
+    /// Pure white is reserved for the screen's one primary action. Selection
     /// remains on `stageSurface` and uses a dedicated glyph instead.
     static let stageActionSurface = StagePalette.color(StagePalette.actionSurface)
     static let stageInk = StagePalette.color(StagePalette.ink)
-    static let stageStroke = Color.white.opacity(0.09)
+
+    /// The **only** boundary recipe on the Quiet Stage. Routine card, button,
+    /// field, and row outlines were removed — a surface is distinguished by its
+    /// fill (`stageSurface` on `stageBackground`), not by a hairline. A visible
+    /// boundary is drawn back in only where it carries meaning: focus, or
+    /// Increase Contrast, where the fill difference alone is not enough.
+    static func stageBoundary(_ contrast: ColorSchemeContrast) -> Color {
+        contrast == .increased ? stageSecondary.opacity(0.6) : .clear
+    }
 
     /// Adaptive fill for a *secondary* button or quiet "add"/affordance chip on
     /// system chrome (e.g. the secondary "Import from Files" button, the
@@ -211,6 +219,8 @@ struct StageSelectableRow: View {
     let isSelected: Bool
     let action: () -> Void
 
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: Spacing.md) {
@@ -241,7 +251,7 @@ struct StageSelectableRow: View {
             )
             .overlay {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Theme.stageStroke, lineWidth: 1)
+                    .stroke(Theme.stageBoundary(colorSchemeContrast), lineWidth: 1)
             }
             .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
@@ -254,6 +264,7 @@ struct StageSelectableRow: View {
 struct StageSecondaryActionButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -268,7 +279,7 @@ struct StageSecondaryActionButtonStyle: ButtonStyle {
             )
             .overlay {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Theme.stageStroke, lineWidth: 1)
+                    .stroke(Theme.stageBoundary(colorSchemeContrast), lineWidth: 1)
             }
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.985 : 1)
             .animation(
