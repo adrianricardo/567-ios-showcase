@@ -6,16 +6,14 @@ enum VideoImportPersistence {
     @MainActor
     static func insertVideo(
         from result: VideoImportResult,
-        in context: ModelContext,
-        isDemo: Bool = false
+        in context: ModelContext
     ) -> Video {
         let video = Video(
             displayName: result.displayName,
             localFilename: result.filename,
             sourceAssetID: result.sourceID,
             recordedAt: result.recordedAt,
-            duration: result.duration,
-            isDemo: isDemo
+            duration: result.duration
         )
         context.insert(video)
         prewarmThumbnails(for: video)

@@ -94,7 +94,7 @@ struct StylePickerPaneView: View {
 
     private var header: some View {
         Text("Styles")
-            .font(.system(.largeTitle, design: .rounded, weight: .bold))
+            .font(Typography.screenTitle)
             .tracking(-0.8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, Spacing.lg)
@@ -178,7 +178,7 @@ struct StylePickerPaneView: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, Spacing.lg)
-            .frame(minHeight: 56)
+            .frame(minHeight: Spacing.rowMinHeight)
             .background(Theme.stageSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)

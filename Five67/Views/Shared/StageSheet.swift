@@ -36,7 +36,7 @@ struct StageSheet<Content: View>: View {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text(title)
-                        .font(.title3.weight(.bold))
+                        .font(Typography.sectionTitle)
                         .foregroundStyle(Theme.stagePrimary)
                     if let subtitle {
                         Text(subtitle)

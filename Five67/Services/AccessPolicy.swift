@@ -64,14 +64,25 @@ struct UnlockPurchaseResolution: Equatable {
 }
 
 enum AccessPolicy {
-    /// Free installs may keep this many **personal** videos. The bundled demo
-    /// never counts toward it.
+    /// Free installs may keep this many personal videos.
     static let freeVideoLimit = 3
 
     // v1.0 was the last unlimited release. Its final repository state was build
     // 52; the shipping binary was built earlier, so <= 52 safely includes every
     // install that first downloaded a free/unlimited production build.
     static let lastLegacyBuildNumber = 52
+
+    /// AppTransaction can fall back to an interactive receipt renewal when its
+    /// signed app transaction is unavailable. Startup must not trigger that
+    /// Apple Account prompt, so callers disable this lookup in environments
+    /// that cannot provide production app-transaction history silently.
+    static func shouldRequestLegacyAppTransaction(
+        hasLegacyUnlimited: Bool,
+        legacyEvaluationComplete: Bool,
+        automaticLookupAllowed: Bool
+    ) -> Bool {
+        !hasLegacyUnlimited && !legacyEvaluationComplete && automaticLookupAllowed
+    }
 
     static func videoImportAllowance(
         accessLevel: AccessLevel,

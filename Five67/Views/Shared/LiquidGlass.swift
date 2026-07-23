@@ -47,7 +47,7 @@ struct GlassCluster<Content: View>: View {
     var spacing: CGFloat
     @ViewBuilder var content: () -> Content
 
-    init(spacing: CGFloat = 20, @ViewBuilder content: @escaping () -> Content) {
+    init(spacing: CGFloat = Spacing.xl, @ViewBuilder content: @escaping () -> Content) {
         self.spacing = spacing
         self.content = content
     }

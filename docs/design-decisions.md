@@ -2,13 +2,21 @@
 
 Newest decisions first. These are approved iOS experience decisions; product-level principles also live in the shared product brain.
 
+## 2026-07-22 — Onboarding requires the user's own video
+
+**Decision:** Remove the bundled demo-video concept completely. Onboarding asks the user to choose one of their own class videos through Apple's private `PhotosPicker`; there is no bundled video, demo escape hatch, demo-specific data marker, or special cap/export treatment. The payoff preview remains a lightweight native composition with no media asset.
+
+**Supersedes:** Every demo-specific clause in the 2026-07-21 decision and `specs/0007-onboarding-core-ui-redesign.plan.md`. The rest of the approved 7-beat onboarding, 3-video free cap, one free style, and Feed completion route remain unchanged.
+
+**Rationale:** The real first video is the activation event. Maintaining a parallel demo path added binary weight, schema state, review instructions, and policy exceptions without improving the core practice loop.
+
 ## 2026-07-21 — Three-video free cap and the redesigned onboarding
 
-**Decision:** The free tier keeps **3 personal videos** and one personal-content style. Onboarding becomes the approved 7-beat sequence — hook, motivation, tailored payoff, seed video, guided editor, result reveal, paywall — and ends by routing to the Feed focused on the user's own first move. The bundled demo clip is identified persistently (`Video.isDemo`, schema V5) and never counts toward the cap, the free-style claim, legacy grandfathering, or library exports. Video selection uses Apple's private `PhotosPicker` only; the app no longer requests Photo Library authorization and ships without `NSPhotoLibraryUsageDescription`.
+**Decision:** The free tier keeps **3 personal videos** and one personal-content style. Onboarding becomes the approved 7-beat sequence — hook, motivation, tailored payoff, seed video, guided editor, result reveal, paywall — and ends by routing to the Feed focused on the user's own first move. Video selection uses Apple's private `PhotosPicker` only; the app no longer requests Photo Library authorization and ships without `NSPhotoLibraryUsageDescription`. The bundled-demo portion of this decision was superseded on 2026-07-22.
 
 **Supersedes:** `specs/0005-freemium-unlock-smart-import.md`'s **10-video** cap and its 12-beat onboarding blueprint (`docs/onboarding-0005.md`), and the "up to 10 videos" product assumption recorded in `specs/0006-release-closure.plan.md`. Those documents remain accurate records of what shipped as v1.0 — do not read them as current behavior.
 
-**Rationale:** 10 videos put the cap-hit roughly a month out, long after the moment the user has felt the product work. Three lands the decision while the first named move is still the thing they are looking at. The demo exclusion is what makes that honest: a user who never imported anything of their own is never charged for the clip 567 gave them.
+**Rationale:** 10 videos put the cap-hit roughly a month out, long after the moment the user has felt the product work. Three lands the decision while the first named move is still the thing they are looking at.
 
 **Evidence:** `specs/0007-onboarding-core-ui-redesign.plan.md` (P1–P6), and Adrian's approval of the redesign sequence.
 

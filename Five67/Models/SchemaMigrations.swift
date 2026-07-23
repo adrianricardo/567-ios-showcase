@@ -248,117 +248,10 @@ enum SchemaV3: VersionedSchema {
     }
 }
 
-// MARK: - V4 (DanceStyle scalar → Style @Model relationship)
-//
-// Inlined as a frozen snapshot so the live `Video`/`Style`/`Move` types can move
-// forward to V5 (adds `Video.isDemo`) without changing what V4 means on disk.
+// MARK: - V4 (DanceStyle scalar → Style @Model relationship) — current live schema
 
 enum SchemaV4: VersionedSchema {
     static var versionIdentifier: Schema.Version { Schema.Version(4, 0, 0) }
-    static var models: [any PersistentModel.Type] {
-        [Video.self, Move.self, Style.self]
-    }
-
-    @Model
-    final class Video {
-        @Attribute(.unique) var id: UUID
-        var displayName: String
-        var localFilename: String
-        var sourceAssetID: String?
-        var importedAt: Date
-        var recordedAt: Date?
-        var duration: TimeInterval
-        var style: Style?
-        @Relationship(deleteRule: .cascade) var moves: [Move] = []
-
-        init(
-            id: UUID = UUID(),
-            displayName: String,
-            localFilename: String,
-            sourceAssetID: String? = nil,
-            importedAt: Date = Date(),
-            recordedAt: Date? = nil,
-            duration: TimeInterval,
-            style: Style? = nil
-        ) {
-            self.id = id
-            self.displayName = displayName
-            self.localFilename = localFilename
-            self.sourceAssetID = sourceAssetID
-            self.importedAt = importedAt
-            self.recordedAt = recordedAt
-            self.duration = duration
-            self.style = style
-        }
-    }
-
-    @Model
-    final class Move {
-        @Attribute(.unique) var id: UUID
-        var name: String
-        var category: Category
-        var status: Status
-        var time: TimeInterval
-        var endTime: TimeInterval?
-        var notes: String
-        var isExcluded: Bool
-        var createdAt: Date
-        var updatedAt: Date
-        var video: Video?
-
-        init(
-            id: UUID = UUID(),
-            name: String,
-            category: Category = .footwork,
-            status: Status = .empty,
-            time: TimeInterval,
-            endTime: TimeInterval? = nil,
-            notes: String = "",
-            isExcluded: Bool = false,
-            createdAt: Date = Date(),
-            updatedAt: Date = Date(),
-            video: Video? = nil
-        ) {
-            self.id = id
-            self.name = name
-            self.category = category
-            self.status = status
-            self.time = time
-            self.endTime = endTime
-            self.notes = notes
-            self.isExcluded = isExcluded
-            self.createdAt = createdAt
-            self.updatedAt = updatedAt
-            self.video = video
-        }
-    }
-
-    @Model
-    final class Style {
-        @Attribute(.unique) var id: UUID
-        var name: String
-        var isDefault: Bool
-        var createdAt: Date
-        @Relationship(inverse: \Video.style) var videos: [Video] = []
-
-        init(
-            id: UUID = UUID(),
-            name: String,
-            isDefault: Bool = false,
-            createdAt: Date = Date()
-        ) {
-            self.id = id
-            self.name = name
-            self.isDefault = isDefault
-            self.createdAt = createdAt
-        }
-    }
-}
-
-// MARK: - V5 (adds Video.isDemo) — current live schema
-
-enum SchemaV5: VersionedSchema {
-    static var versionIdentifier: Schema.Version { Schema.Version(5, 0, 0) }
     static var models: [any PersistentModel.Type] {
         [Video.self, Move.self, Style.self]
     }
@@ -368,20 +261,12 @@ enum SchemaV5: VersionedSchema {
 
 enum Five67MigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaV1.self, SchemaV2.self, SchemaV3.self, SchemaV4.self, SchemaV5.self]
+        [SchemaV1.self, SchemaV2.self, SchemaV3.self, SchemaV4.self]
     }
 
     static var stages: [MigrationStage] {
-        [v1ToV2, v2ToV3, v3ToV4, v4ToV5]
+        [v1ToV2, v2ToV3, v3ToV4]
     }
-
-    /// V4→V5 adds the non-optional `Video.isDemo` (default `false`), so every
-    /// existing row migrates as personal content. The default value makes this a
-    /// pure lightweight column add.
-    static let v4ToV5 = MigrationStage.lightweight(
-        fromVersion: SchemaV4.self,
-        toVersion: SchemaV5.self
-    )
 
     static let v1ToV2 = MigrationStage.lightweight(
         fromVersion: SchemaV1.self,
@@ -414,28 +299,14 @@ enum Five67MigrationPlan: SchemaMigrationPlan {
             v3StyleSnapshot = map
         },
         didMigrate: { context in
-            // 1. Seed the three defaults at V4 shape (idempotent — safe on
-            //    re-launch too). Pinned to `SchemaV4.Style` so this stage's
-            //    destination shape stays fixed even after the live type advances.
-            let defaultSpecs: [(UUID, String)] = [
-                (Style.Default.cumbia, "Cumbia"),
-                (Style.Default.salsa, "Salsa"),
-                (Style.Default.bachata, "Bachata")
-            ]
-            for (id, name) in defaultSpecs {
-                let descriptor = FetchDescriptor<SchemaV4.Style>(
-                    predicate: #Predicate { $0.id == id }
-                )
-                if (try? context.fetch(descriptor).first) == nil {
-                    context.insert(SchemaV4.Style(id: id, name: name, isDefault: true))
-                }
-            }
+            // 1. Seed the three defaults (idempotent — safe on re-launch too).
+            Style.seedDefaultsIfNeeded(in: context)
 
             // 2. Re-point every video whose V3 style we captured.
-            let allStyles = try context.fetch(FetchDescriptor<SchemaV4.Style>())
+            let allStyles = try context.fetch(FetchDescriptor<Style>())
             let stylesByID = Dictionary(uniqueKeysWithValues: allStyles.map { ($0.id, $0) })
 
-            let videos = try context.fetch(FetchDescriptor<SchemaV4.Video>())
+            let videos = try context.fetch(FetchDescriptor<Video>())
             for v in videos {
                 guard
                     let raw = v3StyleSnapshot[v.id],

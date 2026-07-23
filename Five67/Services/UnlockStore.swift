@@ -129,7 +129,7 @@ enum UnlockProduct {
     /// Keeps the free-style claim in sync with the personal library. When the
     /// last personal video is removed the claim is cleared, so the next styled
     /// personal video establishes a fresh free style. Demo content is excluded
-    /// from `personalVideoCount` by callers, so it can never hold the claim open.
+    /// The claim is cleared once the user's library becomes empty.
     func recountPersonalVideos(_ personalVideoCount: Int) {
         guard personalVideoCount == 0 else { return }
         guard claimedFreeStyleID != nil else { return }
@@ -282,8 +282,18 @@ enum UnlockProduct {
     }
 
     private func evaluateAppTransactionForLegacyAccess(existingLibraryCount: Int) async {
-        guard !legacyUnlimited else { return }
-        guard !defaults.bool(forKey: Keys.legacyEvaluationComplete) else { return }
+#if targetEnvironment(simulator)
+        // A raw Simulator install has no production app transaction. Asking for
+        // one makes StoreKit attempt an interactive receipt renewal at launch.
+        let automaticLookupAllowed = false
+#else
+        let automaticLookupAllowed = true
+#endif
+        guard AccessPolicy.shouldRequestLegacyAppTransaction(
+            hasLegacyUnlimited: legacyUnlimited,
+            legacyEvaluationComplete: defaults.bool(forKey: Keys.legacyEvaluationComplete),
+            automaticLookupAllowed: automaticLookupAllowed
+        ) else { return }
 
         do {
             let result = try await AppTransaction.shared

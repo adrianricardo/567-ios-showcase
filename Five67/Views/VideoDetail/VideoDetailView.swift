@@ -77,7 +77,7 @@ struct VideoDetailView: View {
     var body: some View {
         contentList
             .environment(controller)
-            .safeAreaInset(edge: .top, spacing: 0) {
+            .safeAreaInset(edge: .top, spacing: Spacing.none) {
                 heroSection
             }
             .onChange(of: controller.currentTime) { _, t in

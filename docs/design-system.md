@@ -52,6 +52,15 @@ Joyful, premium, simple, minimal, and polished. The product should feel unusuall
 - Prefer a few large, legible objects over dense collections of small controls.
 - Content cards and primary actions use 16–18pt continuous corners. Capsules and circles are reserved for compact controls, tags, and native chrome.
 
+### Typography
+
+The semantic implementation lives in `Five67/Views/Shared/Typography.swift` and remains based on Dynamic Type text styles.
+
+- `Typography.screenTitle` — rounded, bold `largeTitle` for major friendly page and flow titles.
+- `Typography.immersiveTitle` — compact bold `title3` for the current move/video title over immersive media.
+- `Typography.sectionTitle` — bold `title3` for sheets, cards, coach beats, and other local sections.
+- Body, supporting, and metadata copy continue to use the native semantic `.body`, `.subheadline`, `.footnote`, and `.caption` styles directly.
+
 ### Surface hierarchy
 
 | Level | Use | Behavior |

@@ -49,6 +49,9 @@ struct VideoFeedView: View {
     @State private var styleTagTargets: [Video] = []
     @State private var showStyleTagPrompt = false
     @State private var styleTagChoice: Style?
+    @State private var styleTagCreationRequested = false
+    @State private var showAddStyleSheet = false
+    @State private var pendingStyleCreation = false
 
     // Add-video sheet, presented by the Add button or Library import actions.
     // The sheet only records a choice; `onDismiss` runs the one import path so
@@ -217,8 +220,20 @@ struct VideoFeedView: View {
                 styles: allStyles,
                 selectedStyleID: styleTagTargets.first?.style?.id,
                 onSelect: { styleTagChoice = $0 },
-                onSkip: { styleTagChoice = nil }
+                onAddNewStyle: { styleTagCreationRequested = true }
             )
+        }
+        .sheet(isPresented: $showAddStyleSheet, onDismiss: handleAddStyleSheetDismiss) {
+            RenameSheet(
+                title: "New Style",
+                isPresented: $showAddStyleSheet,
+                initial: ""
+            ) { newName in
+                let style = Style(name: newName)
+                modelContext.insert(style)
+                requestStyleForTargets(style)
+                try? modelContext.save()
+            }
         }
         .sheet(isPresented: $showAddVideoSheet, onDismiss: handleAddVideoSheetDismiss) {
             ImportSourceSheet { addVideoChoice = $0 }
@@ -314,7 +329,7 @@ struct VideoFeedView: View {
     private var noMovesCTACard: some View {
         VStack(spacing: Spacing.smPlus) {
             Text("No moves yet")
-                .font(.title3.weight(.heavy))
+                .font(Typography.sectionTitle)
                 .foregroundStyle(.white)
             Text("You haven't added any moves to this video.")
                 .font(.subheadline.weight(.medium))
@@ -445,7 +460,7 @@ struct VideoFeedView: View {
     }
 
     private var tapZones: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: Spacing.none) {
             Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -481,7 +496,7 @@ struct VideoFeedView: View {
     @ViewBuilder
     private var playbackOverlay: some View {
         if let controller = activeController, !controller.isPlaying, !coachActive {
-            GlassCluster(spacing: 14) {
+            GlassCluster(spacing: Spacing.mdPlus) {
                 ZStack {
                     Image(systemName: "play.fill")
                         .font(.system(size: 22, weight: .heavy))
@@ -489,7 +504,7 @@ struct VideoFeedView: View {
                         .frame(width: 48, height: 48)
                         .liquidGlass(in: Circle())
                         .allowsHitTesting(false)
-                        .offset(y: -(24 + 14 + 13) / 2)
+                        .offset(y: -(24 + Spacing.mdPlus + 13) / 2)
 
                     Button {
                         session.isMuted.toggle()
@@ -504,7 +519,7 @@ struct VideoFeedView: View {
                             .liquidGlass(in: Circle(), interactive: true)
                     }
                     .accessibilityLabel(session.isMuted ? "Unmute" : "Mute")
-                    .offset(y: -3 * (24 + 14 + 13) / 2)
+                    .offset(y: -3 * (24 + Spacing.mdPlus + 13) / 2)
                 }
             }
             .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
@@ -529,7 +544,7 @@ struct VideoFeedView: View {
 
             HStack(spacing: Spacing.md) {
                 Text(feedTitle(for: video))
-                    .font(.title2.weight(.heavy))
+                    .font(Typography.immersiveTitle)
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -585,7 +600,7 @@ struct VideoFeedView: View {
 
             VStack(spacing: Spacing.smPlus) {
                 Text("Drop in a dance video")
-                    .font(.largeTitle.weight(.heavy))
+                    .font(Typography.screenTitle)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white)
                 Text("567 becomes a full-screen feed: swipe between videos, tap through moves, and use the Library tab for all your content.")
@@ -613,7 +628,7 @@ struct VideoFeedView: View {
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 54)
+                        .frame(height: Spacing.rowMinHeight)
                         .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .overlay {
                             RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -643,7 +658,7 @@ struct VideoFeedView: View {
                     .symbolEffect(.bounce, options: .repeating)
 
                 Text("Swipe up for your next video")
-                    .font(.title3.weight(.heavy))
+                    .font(Typography.sectionTitle)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white)
                     .padding(.horizontal, Spacing.xl4)
@@ -655,7 +670,7 @@ struct VideoFeedView: View {
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(.black)
                         .padding(.horizontal, Spacing.xl3)
-                        .frame(height: 46)
+                        .frame(height: Spacing.touchTarget)
                         .background(.white, in: Capsule())
                 }
                 .padding(.top, Spacing.xs)
@@ -688,7 +703,7 @@ struct VideoFeedView: View {
                     Spacer(minLength: 0)
 
                     Text("Tap the sides to skip between moves")
-                        .font(.title3.weight(.heavy))
+                        .font(Typography.sectionTitle)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.white)
                         .padding(.horizontal, Spacing.xl4 + Spacing.xs)
@@ -701,10 +716,16 @@ struct VideoFeedView: View {
                             .font(.subheadline.weight(.bold))
                             .foregroundStyle(.black)
                             .padding(.horizontal, Spacing.xl3)
-                            .frame(height: 46)
+                            .frame(height: Spacing.touchTarget)
                             .background(.white, in: Capsule())
                     }
-                    .padding(.bottom, max(140, geo.safeAreaInsets.bottom + 120))
+                    .padding(
+                        .bottom,
+                        max(
+                            Spacing.feedCoachMinimumBottomClearance,
+                            geo.safeAreaInsets.bottom + Spacing.feedCoachBottomClearance
+                        )
+                    )
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -1168,7 +1189,7 @@ struct VideoFeedView: View {
         defer { isImporting = false }
 
         let allowance = unlockStore.videoImportAllowance(
-            personalVideoCount: allVideos.personalVideoCount,
+            personalVideoCount: allVideos.count,
             requestedCount: items.count
         )
         var firstError: String?
@@ -1201,7 +1222,7 @@ struct VideoFeedView: View {
         defer { isImporting = false }
 
         let allowance = unlockStore.videoImportAllowance(
-            personalVideoCount: allVideos.personalVideoCount,
+            personalVideoCount: allVideos.count,
             requestedCount: urls.count
         )
         var firstError: String?
@@ -1251,7 +1272,7 @@ struct VideoFeedView: View {
 
     private func requestImport(_ source: ImportSource) {
         let allowance = unlockStore.videoImportAllowance(
-            personalVideoCount: allVideos.personalVideoCount,
+            personalVideoCount: allVideos.count,
             requestedCount: 1
         )
         guard allowance.allowedCount == 1 else {
@@ -1284,7 +1305,7 @@ struct VideoFeedView: View {
     }
 
     private func resumeDeferredPromptAfterUnlockSheet() {
-        if !styleTagTargets.isEmpty {
+        if !styleTagTargets.isEmpty, !showAddStyleSheet {
             showStyleTagPrompt = true
         }
     }
@@ -1297,27 +1318,52 @@ struct VideoFeedView: View {
         requestImport(choice)
     }
 
-    /// Same deferral for style tagging: a blocked style has to open the paywall
-    /// once this sheet has finished dismissing. No choice means Skip.
+    /// Same deferral for style tagging: a blocked style or new-style request
+    /// continues only once the current sheet has finished dismissing.
     private func handleStyleTagSheetDismiss() {
-        guard let style = styleTagChoice else {
-            styleTagTargets = []
-            pendingStyleTagID = nil
+        if styleTagCreationRequested {
+            styleTagCreationRequested = false
+            requestStyleCreationForTargets()
             return
         }
+        guard let style = styleTagChoice else { return }
         styleTagChoice = nil
         requestStyleForTargets(style)
+    }
+
+    private func requestStyleCreationForTargets() {
+        guard unlockStore.canUseStyle(UUID()) else {
+            pendingStyleCreation = true
+            unlockPrompt = .styleLimit
+            return
+        }
+        showAddStyleSheet = true
+    }
+
+    /// Cancelling name entry returns to the required choice instead of acting
+    /// as an implicit Skip. Saving clears the targets through the normal style
+    /// assignment path, so there is nothing to reopen.
+    private func handleAddStyleSheetDismiss() {
+        if !styleTagTargets.isEmpty {
+            showStyleTagPrompt = true
+        }
     }
 
     private func handleUnlockSheetDismiss() {
         if unlockSucceeded {
             unlockSucceeded = false
-            resumePendingAccessIntent()
+            if pendingStyleCreation {
+                pendingStyleCreation = false
+                showAddStyleSheet = true
+            } else {
+                resumePendingAccessIntent()
+            }
         } else {
             // "Not now" cancels the blocked import instead of reopening the
             // source dialog in a loop. Any videos already admitted from a
             // partially allowed batch still proceed to their style prompt.
             pendingImportSource = nil
+            pendingStyleCreation = false
         }
         resumeDeferredPromptAfterUnlockSheet()
     }

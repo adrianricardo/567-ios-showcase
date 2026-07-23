@@ -24,7 +24,7 @@ enum VideoDeletionService {
         // by id so the result does not depend on when SwiftData flushes.
         let remaining = (try? context.fetch(FetchDescriptor<Video>())) ?? []
         unlockStore.recountPersonalVideos(
-            remaining.filter { $0.id != videoID }.personalVideoCount
+            remaining.filter { $0.id != videoID }.count
         )
 
         Haptics.medium()

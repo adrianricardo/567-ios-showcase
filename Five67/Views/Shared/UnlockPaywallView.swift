@@ -19,7 +19,7 @@ struct UnlockPaywallView: View {
         VStack(alignment: .leading, spacing: Spacing.xl4) {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 Text("Unlock unlimited videos & styles.")
-                    .font(.largeTitle.weight(.heavy))
+                    .font(Typography.screenTitle)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(reason.explanation)
                     .font(.body)
@@ -82,7 +82,7 @@ struct UnlockPaywallView: View {
     private func benefitRow(_ title: String, _ detail: String) -> some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             Text(title)
-                .font(.title3.weight(.bold))
+                .font(Typography.sectionTitle)
             Text(detail)
                 .font(.subheadline)
                 .foregroundStyle(Theme.stageSecondary)

@@ -44,7 +44,7 @@ struct MoveRowView: View {
     }
 
     private var displayName: String {
-        move.name.isEmpty ? "Unnamed segment" : move.name
+        move.name.isEmpty ? "Unnamed" : move.name
     }
 
     private var showAddName: Bool {
@@ -67,7 +67,7 @@ struct MoveRowView: View {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text(displayName)
                         .font(.body)
-                        .foregroundStyle(primaryForeground)
+                        .foregroundStyle(move.name.isEmpty ? secondaryForeground : primaryForeground)
                         .lineLimit(1)
 
                     Text(move.durationLabel)
@@ -86,7 +86,7 @@ struct MoveRowView: View {
                         // (now adaptive) dark move list.
                         Text("Add name")
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(isActive && activeForegroundColor != nil ? primaryForeground : accentColor)
+                            .foregroundStyle(accentColor)
                             .padding(.horizontal, Spacing.md)
                             .padding(.vertical, Spacing.xs)
                             .background(Capsule().fill(Theme.secondaryChipFill))

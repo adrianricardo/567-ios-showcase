@@ -36,10 +36,10 @@ struct OnboardingProductPreview: View {
 
     var body: some View {
         VStack(spacing: Spacing.md) {
-            loopingPlayer
+            previewStage
 
             OnboardingPreviewMoveRow(
-                name: "Cross-body lead",
+                name: "Right turn",
                 duration: "0:12",
                 isPlaying: true,
                 accent: accent
@@ -60,21 +60,41 @@ struct OnboardingProductPreview: View {
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "A class video split into named moves. Cross-body lead is looping."
+            "A class video split into named moves. Right turn is looping."
         )
     }
 
-    private var loopingPlayer: some View {
+    private var previewStage: some View {
         VStack(spacing: Spacing.sm) {
             ZStack {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.black)
+                LinearGradient(
+                    colors: [Theme.stageRaisedSurface, Theme.stageSurface],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+
                 Image(systemName: "figure.dance")
-                    .font(.system(size: 44, weight: .light))
-                    .foregroundStyle(Theme.stageSecondary)
+                    .font(.system(size: 54, weight: .medium))
+                    .foregroundStyle(accent)
+
+                VStack {
+                    Spacer()
+                    HStack {
+                        Text("Right turn")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Theme.stagePrimary)
+                        Spacer()
+                        Text("LOOPING")
+                            .font(.caption2.weight(.bold))
+                            .tracking(0.8)
+                            .foregroundStyle(accent)
+                    }
+                    .padding(Spacing.smPlus)
+                }
             }
             .frame(maxWidth: .infinity)
             .frame(height: 132)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
@@ -92,7 +112,7 @@ struct OnboardingProductPreview: View {
                 loopProgress = 0.72
                 return
             }
-            withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
+            withAnimation(.linear(duration: 5.7).repeatForever(autoreverses: false)) {
                 loopProgress = 0.94
             }
         }
@@ -119,7 +139,7 @@ private struct OnboardingPreviewMoveRow: View {
             )
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text(name.isEmpty ? "Unnamed segment" : name)
+                Text(name.isEmpty ? "Unnamed" : name)
                     .font(.body)
                     .foregroundStyle(name.isEmpty ? Theme.stageSecondary : Theme.stagePrimary)
                     .lineLimit(1)

@@ -22,6 +22,9 @@ struct OnboardingFlow: View {
     @State private var importError: String?
     @State private var seedVideo: Video?
     @State private var showStyleTagSheet = false
+    @State private var styleTagCreationRequested = false
+    @State private var showAddStyleSheet = false
+    @State private var createdStyleForSeed = false
     @State private var navigationDirection: NavigationDirection = .forward
 
     private let preferences = OnboardingPreferences()
@@ -52,15 +55,29 @@ struct OnboardingFlow: View {
             pickerItems = []
             Task { await importSeedVideo(item) }
         }
-        // The canonical post-import style sheet (P3). Personal seeds are tagged
-        // here; demo content arrives pre-styled and never opens this.
-        .sheet(isPresented: $showStyleTagSheet, onDismiss: openEditor) {
+        // The canonical post-import style sheet tags the onboarding seed before
+        // the editor opens.
+        .sheet(isPresented: $showStyleTagSheet, onDismiss: handleStyleTagSheetDismiss) {
             StyleSelectionSheet(
                 context: .tagImport(count: 1),
                 styles: allStyles,
                 selectedStyleID: seedVideo?.style?.id,
-                onSelect: applySeedStyle
+                onSelect: applySeedStyle,
+                onAddNewStyle: { styleTagCreationRequested = true }
             )
+        }
+        .sheet(isPresented: $showAddStyleSheet, onDismiss: handleAddStyleSheetDismiss) {
+            RenameSheet(
+                title: "New Style",
+                isPresented: $showAddStyleSheet,
+                initial: ""
+            ) { newName in
+                let style = Style(name: newName)
+                modelContext.insert(style)
+                applySeedStyle(style)
+                try? modelContext.save()
+                createdStyleForSeed = true
+            }
         }
         .alert("Import Error", isPresented: Binding(
             get: { importError != nil },
@@ -88,6 +105,14 @@ struct OnboardingFlow: View {
         guard let style = seedVideo?.style else { return Theme.stagePrimary }
         return StyleAccentPalette.accent(forName: style.name, id: style.id)?.color
             ?? Theme.stagePrimary
+    }
+
+    private var payoffAccent: Color {
+        StyleAccentPalette.salsa.color
+    }
+
+    private var progressAccent: Color {
+        beat == .payoff ? payoffAccent : onboardingAccent
     }
 
     private var beatTransition: AnyTransition {
@@ -152,7 +177,7 @@ struct OnboardingFlow: View {
                 Spacer()
             }
 
-            OnboardingProgressDots(progress: beat.progress, accent: onboardingAccent)
+            OnboardingProgressDots(progress: beat.progress, accent: progressAccent)
         }
         .padding(.horizontal, Spacing.md)
         .padding(.top, Spacing.sm)
@@ -170,14 +195,10 @@ struct OnboardingFlow: View {
     // MARK: - Beats
 
     private var hookBeat: some View {
-        VStack(spacing: Spacing.xl4) {
-            OnboardingProductPreview(reduceMotion: reduceMotion)
-                .frame(maxWidth: .infinity)
-                .frame(height: 380)
-
+        VStack(spacing: Spacing.xl3) {
             VStack(spacing: Spacing.md) {
                 Text("Never forget a turn or combo again.")
-                    .font(.largeTitle.weight(.heavy))
+                    .font(Typography.screenTitle)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -188,6 +209,12 @@ struct OnboardingFlow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            Image("OnboardingMoveCards")
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity)
+                .accessibilityLabel("Three saved dance moves organized by dance style")
+
             primaryButton("Get started") { goNext() }
         }
     }
@@ -195,7 +222,7 @@ struct OnboardingFlow: View {
     private var motivationBeat: some View {
         VStack(alignment: .leading, spacing: Spacing.xl4) {
             Text("What do you want 567 for?")
-                .font(.largeTitle.weight(.heavy))
+                .font(Typography.screenTitle)
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(spacing: Spacing.md) {
@@ -217,13 +244,9 @@ struct OnboardingFlow: View {
 
     private var payoffBeat: some View {
         VStack(spacing: Spacing.xl4) {
-            OnboardingProductPreview(reduceMotion: reduceMotion, showsUnnamedRow: true)
-                .frame(maxWidth: .infinity)
-                .frame(height: 380)
-
             VStack(spacing: Spacing.md) {
                 Text(motivation?.payoffHeadline ?? "Give every class video a home.")
-                    .font(.largeTitle.weight(.heavy))
+                    .font(Typography.screenTitle)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -234,6 +257,14 @@ struct OnboardingFlow: View {
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
+
+            OnboardingProductPreview(
+                reduceMotion: reduceMotion,
+                accent: payoffAccent,
+                showsUnnamedRow: true
+            )
+                .frame(maxWidth: .infinity)
+                .frame(height: 380)
 
             primaryButton("Show me how") { goNext() }
         }
@@ -260,7 +291,7 @@ struct OnboardingFlow: View {
 
             VStack(spacing: Spacing.md) {
                 Text("Pick a video from your recent classes.")
-                    .font(.largeTitle.weight(.heavy))
+                    .font(Typography.screenTitle)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("Start with one — we'll turn it into your first move.")
@@ -270,17 +301,10 @@ struct OnboardingFlow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            VStack(spacing: Spacing.md) {
-                primaryButton(isImportingSeed ? "Saving…" : "Choose video") {
-                    showSeedPicker = true
-                }
-                .disabled(isImportingSeed)
-
-                secondaryButton("I don't have one—try a demo") {
-                    Task { await ingestDemoSeed() }
-                }
-                .disabled(isImportingSeed)
+            primaryButton(isImportingSeed ? "Saving…" : "Choose video") {
+                showSeedPicker = true
             }
+            .disabled(isImportingSeed)
         }
     }
 
@@ -295,7 +319,7 @@ struct OnboardingFlow: View {
 
             VStack(spacing: Spacing.md) {
                 Text("Your video's still here.")
-                    .font(.largeTitle.weight(.heavy))
+                    .font(Typography.screenTitle)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("Pick up where you left off with \(video.displayName).")
@@ -451,31 +475,32 @@ struct OnboardingFlow: View {
         }
     }
 
-    /// Demo content arrives pre-styled and skips the tagging sheet. Ingestion
-    /// dedupes on the bundled source ID, so a restart never copies it twice.
-    private func ingestDemoSeed() async {
-        isImportingSeed = true
-        defer { isImportingSeed = false }
-
-        do {
-            let video = try await OnboardingDemoIngestion.ingest(in: modelContext)
-            try? modelContext.save()
-            adoptSeed(video)
-            Haptics.success()
-            openEditor()
-        } catch {
-            importError = error.localizedDescription
-        }
-    }
-
     /// Applies the tagging sheet's choice. `recordStyleUse` is what claims the
     /// one free style, so it only ever runs for personal content.
     private func applySeedStyle(_ style: Style?) {
-        guard let seedVideo, !seedVideo.isDemo else { return }
+        guard let seedVideo else { return }
         unlockStore.recordStyleUse(style?.id)
         seedVideo.style = style
         styleStore.activeStyle = style
         try? modelContext.save()
+    }
+
+    private func handleStyleTagSheetDismiss() {
+        guard styleTagCreationRequested else {
+            openEditor()
+            return
+        }
+        styleTagCreationRequested = false
+        showAddStyleSheet = true
+    }
+
+    private func handleAddStyleSheetDismiss() {
+        if createdStyleForSeed {
+            createdStyleForSeed = false
+            openEditor()
+        } else {
+            showStyleTagSheet = true
+        }
     }
 
     /// Records the seed so an interrupted onboarding reuses it instead of
@@ -582,7 +607,7 @@ private struct OnboardingResultReveal: View {
 
             VStack(spacing: Spacing.md) {
                 Text("Your first move is ready.")
-                    .font(.largeTitle.weight(.heavy))
+                    .font(Typography.screenTitle)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
 

@@ -51,11 +51,11 @@ struct VideoImporter {
         )
     }
 
-    /// Import from a file URL (e.g. Files picker, or the bundled demo asset).
+    /// Import from a file URL, such as the Files picker.
     /// Caller is responsible for any security-scoped resource access around the URL.
     ///
-    /// `sourceID` is normally nil for user file imports; the bundled demo passes a
-    /// stable identifier so repeat ingestion can be deduped.
+    /// `sourceID` is normally nil for file imports, but callers may provide one
+    /// when the source has a stable identifier that should be deduplicated.
     static func `import`(
         fromFileURL url: URL,
         sourceID: String? = nil

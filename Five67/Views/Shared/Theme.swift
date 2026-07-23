@@ -151,7 +151,7 @@ struct StagePrimaryActionButtonStyle: ButtonStyle {
             .foregroundStyle(isEnabled ? Theme.stageInk : Theme.stageSecondary)
             .padding(.horizontal, Spacing.lg)
             .padding(.vertical, Spacing.lg)
-            .frame(maxWidth: .infinity, minHeight: 56)
+            .frame(maxWidth: .infinity, minHeight: Spacing.primaryButtonHeight)
             .background(
                 isEnabled ? Theme.stageActionSurface : Theme.stageRaisedSurface,
                 in: RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -244,7 +244,7 @@ struct StageSelectableRow: View {
             }
             .padding(.horizontal, Spacing.lg)
             .padding(.vertical, Spacing.md)
-            .frame(maxWidth: .infinity, minHeight: 60)
+            .frame(maxWidth: .infinity, minHeight: Spacing.selectableRowMinHeight)
             .background(
                 Theme.stageSurface,
                 in: RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -272,7 +272,7 @@ struct StageSecondaryActionButtonStyle: ButtonStyle {
             .foregroundStyle(isEnabled ? Theme.stagePrimary : Theme.stageSecondary)
             .padding(.horizontal, Spacing.lg)
             .padding(.vertical, Spacing.lg)
-            .frame(maxWidth: .infinity, minHeight: 56)
+            .frame(maxWidth: .infinity, minHeight: Spacing.primaryButtonHeight)
             .background(
                 Theme.stageSurface,
                 in: RoundedRectangle(cornerRadius: 18, style: .continuous)

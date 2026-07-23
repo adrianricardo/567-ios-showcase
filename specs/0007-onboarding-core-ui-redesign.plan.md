@@ -1,5 +1,11 @@
 # 567 Onboarding and Core UI Redesign
 
+> **Decision update — 2026-07-22:** The bundled demo-video concept was removed
+> before release. All demo-specific requirements and implementation notes below
+> are retained only as historical execution context and are superseded. The live
+> onboarding requires a user-selected video, uses no bundled media asset, and
+> remains on schema V4 with no demo marker or policy/export exceptions.
+
 ## Summary
 
 Implement the approved redesign as one cohesive batch for fresh installs only. Existing users remain permanently legacy-unlimited and do not see onboarding again.
@@ -233,12 +239,12 @@ Primary files: relevant Swift Testing/UI fixture suites, `Five67/Resources/Info.
 
 | ID | Status | Owner/session | Last update | Notes |
 |----|--------|---------------|-------------|-------|
-| P1 Persistence and policy | done | claude-code | 2026-07-21 | V5 demo marker, cap 3, style reset. `make build` + `make test` green |
-| P2 Onboarding session/demo | done* | claude-code | 2026-07-21 | Status/seed + demo ingestion service green. *Demo runtime path unverifiable until `OnboardingDemo.mp4` lands |
+| P1 Persistence and policy | done | claude-code | 2026-07-22 | Cap 3 and style reset retained; pre-release demo marker removed, leaving live schema V4 |
+| P2 Onboarding session | done | claude-code | 2026-07-22 | Status/seed reuse retained; bundled demo ingestion removed |
 | P3 Shared actions and rows | done | claude-code | 2026-07-21 | Shared sheets, `VideoDeletionService`, style list, thumbnail cue. `make build` + `make test` green. Sheet *styling* not yet eyeballed — see P6 |
 | P4 Onboarding UI/navigation | done | claude-code | 2026-07-21 | Approved 7-beat sequence, PhotoKit removed, Feed completion route. `make build` + `make test` green |
 | P5 Paywall/visual system | done | claude-code | 2026-07-21 | Typography-only paywall, localized price CTA, neutral tokens, strokes reduced to a contrast-only rule. `make build` + `make test` green. *Visual/grayscale audit still owed to P6* |
-| P6 Verification/docs | done* | claude-code | 2026-07-21 | Visual audit run and reviewed; App Review notes, decision records, and design-system tokens updated. `make build` + `make test` green. *Two external blockers remain: the licensed `OnboardingDemo.mp4`, and on-device Increase Contrast verification |
+| P6 Verification/docs | done* | claude-code | 2026-07-22 | Visual audit run and reviewed; App Review notes and decisions updated. *On-device Increase Contrast verification remains |
 
 Status values: `pending`, `in-progress`, `blocked`, `done`.
 
@@ -248,13 +254,11 @@ Status values: `pending`, `in-progress`, `blocked`, `done`.
 
 1. Read `AGENTS.md`/`CLAUDE.md`, then this plan top-to-bottom. Do not re-derive
    P1–P6 — they are green (P1–P4 committed; P5–P6 in the worktree).
-2. **All six phases are implemented.** What remains is not a phase — it is two
-   external inputs and the artifacts that depend on them:
-   a. add the licensed `OnboardingDemo.mp4` to the app target, confirm its
-      dance-style label, and run the demo journey end-to-end;
-   b. verify the Increase Contrast boundary on a physical device
+2. **All six phases are implemented.** The demo path was deliberately removed
+   before release. What remains is release validation:
+   a. verify the Increase Contrast boundary on a physical device
       (`docs/open-questions-ios.md`);
-   c. re-shoot the App Review screenshots from a `make run-xcode` build so the
+   b. re-shoot the App Review screenshots from a `make run-xcode` build so the
       paywall shows the real localized price, then work
       `docs/p4-submission.md`'s checklist.
 3. Verify with `make build`, then
@@ -264,8 +268,9 @@ Status values: `pending`, `in-progress`, `blocked`, `done`.
 4. `MigrationTests` passing "with 6 known issues" is expected and correct — that
    is the accepted V3→V4 ZSTYLE breakage, not a regression.
 
-Current state: **P1–P6 complete and verified green**, except the two external
-blockers listed above. `make build`, 54 unit tests, and 24 UI tests all pass.
+Current state: **P1–P6 complete and locally green**. The demo concept is removed,
+the app remains on the shipped V4 schema, and final build/unit/UI verification
+passed on iOS 26.1. On-device Increase Contrast remains open.
 
 #### Environment facts
 
@@ -558,13 +563,11 @@ P3's sheet/trash-glyph audit.
   (P2 already stopped writing the survey keys; `hasCompleted` is still *read* for
   migration and must stay).
 
-**Blocked in P6 (external inputs, not code):**
-1. `OnboardingDemo.mp4` — still not supplied, so the demo journey remains
-   unrunnable and `OnboardingDemoIngestion.styleID` still defaults to Salsa.
-2. On-device Increase Contrast verification (above).
+**Blocked in P6 (external input, not code):**
+1. On-device Increase Contrast verification (above).
 
-Next step: supply the demo asset, then re-shoot App Review screenshots from a
-`make run-xcode` build (StoreKit loaded) and run the device accessibility check.
+Next step: re-shoot App Review screenshots from a `make run-xcode` build
+(StoreKit loaded) and run the device accessibility check.
 
 Files changed: the P1–P6 files listed above,
 `Five67Tests/OnboardingTests.swift`, `Five67UITests/TabBarVerifyTests.swift`,
@@ -582,7 +585,13 @@ Checks run (all green, 2026-07-21):
 - Visual audit captured and reviewed in color and grayscale (see P6 above).
   Increase Contrast could not be exercised in the simulator.
 
-Open questions: none in the plan. Two external inputs remain: the licensed
-`OnboardingDemo.mp4` and its dance-style label (`OnboardingDemoIngestion.styleID`
-currently defaults to Salsa), and the on-device Increase Contrast check tracked in
-`docs/open-questions-ios.md`.
+Release-candidate rerun (green, 2026-07-22):
+- `make build` → BUILD SUCCEEDED with no bundled demo media.
+- Focused onboarding UI journey → 1/1 passed; payoff and seed captures reviewed.
+- `make test TEST_DESTINATION='platform=iOS Simulator,id=C476C564-C536-4C23-AA15-C0A1934D79E6'`
+  on the known-good iOS 26.1 runtime → all unit suites and 24/24 UI tests passed.
+  The logged V1–V3 migration failures remain the accepted `withKnownIssue`
+  probes documented above; the shipped V4 path and fresh-install path pass.
+
+Open questions: none in the plan. The on-device Increase Contrast check remains
+tracked in `docs/open-questions-ios.md`.

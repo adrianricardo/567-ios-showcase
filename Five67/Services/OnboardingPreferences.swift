@@ -102,7 +102,7 @@ struct OnboardingPreferences {
     }
 
     /// Called when a persisted seed ID no longer resolves to a row/file, so the
-    /// Seed step falls back to PhotosPicker/demo actions instead of dead state.
+    /// Seed step falls back to PhotosPicker instead of a dead state.
     func clearSeedVideoID() {
         defaults.removeObject(forKey: Keys.seedVideoID)
     }

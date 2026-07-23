@@ -33,7 +33,7 @@ struct OnboardingGateView<Content: View>: View {
         .onAppear {
             let preferences = OnboardingPreferences()
             // Demo content is never evidence of an existing library.
-            let personalCount = videos.personalVideoCount
+            let personalCount = videos.count
             let resolved = preferences.resolveStatus(existingLibraryCount: personalCount)
 
             // A fresh install that is still inside onboarding must never let its

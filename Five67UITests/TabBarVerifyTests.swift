@@ -52,8 +52,8 @@ final class TabBarVerifyTests: XCTestCase {
     }
 
     /// Walks the approved sequence to the seed step. The seed step must offer
-    /// Apple's private picker and the demo escape hatch — and must never show a
-    /// Photo Library permission primer or prompt.
+    /// Apple's private picker and must never show a Photo Library permission
+    /// primer or prompt.
     func testOnboardingReachesSeedWithoutAPhotoPermissionPrompt() throws {
         continueAfterFailure = false
         app = XCUIApplication()
@@ -82,7 +82,6 @@ final class TabBarVerifyTests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["Pick a video from your recent classes."].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["Choose video"].exists)
-        XCTAssertTrue(app.buttons["I don't have one—try a demo"].exists)
         addScreenshot(named: "p4-onboarding-seed")
 
         // No permission primer survives, and nothing has triggered the system

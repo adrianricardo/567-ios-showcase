@@ -5,7 +5,7 @@ struct NowPlayingStripView: View {
     let onTap: () -> Void
 
     private var displayName: String {
-        move.name.isEmpty ? "Unnamed segment" : move.name
+        move.name.isEmpty ? "Unnamed" : move.name
     }
 
     var body: some View {
@@ -13,10 +13,10 @@ struct NowPlayingStripView: View {
             HStack(spacing: Spacing.smPlus) {
                 StatusDot(status: move.status)
 
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text(displayName)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(move.name.isEmpty ? Color.secondary : Color.primary)
                         .lineLimit(1)
                     Text(move.rangeLabel)
                         .font(.caption.monospacedDigit())

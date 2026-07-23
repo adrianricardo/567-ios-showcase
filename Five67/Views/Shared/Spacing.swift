@@ -49,6 +49,8 @@ enum Spacing {
     static let primaryButtonHeight: CGFloat = 52
     /// 56pt — list row minimum height.
     static let rowMinHeight: CGFloat = 56
+    /// 60pt — canonical selectable-row height.
+    static let selectableRowMinHeight: CGFloat = 60
 
     // MARK: - Feed-screen layout
     /// Legacy offset kept for `VideoDetailView` centering (tab bar is hidden
@@ -57,4 +59,8 @@ enum Spacing {
     /// Small visual gap between content and the bottom of the native tab bar
     /// safe-area inset. Used by panes and the feed CTA card.
     static let bottomBarClearance: CGFloat = 8
+    /// Keeps the feed coach action above the floating bottom navigation.
+    static let feedCoachBottomClearance: CGFloat = 120
+    /// Minimum feed coach clearance when the device safe area is shallow.
+    static let feedCoachMinimumBottomClearance: CGFloat = 140
 }

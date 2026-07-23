@@ -83,7 +83,7 @@ struct OnboardingTests {
         preferences.saveSeedVideoID(UUID())
 
         // Row or file went missing → drop the stale ID, stay in progress so the
-        // Seed step falls back to PhotosPicker/demo actions.
+        // Seed step falls back to PhotosPicker.
         preferences.clearSeedVideoID()
 
         #expect(preferences.seedVideoID == nil)

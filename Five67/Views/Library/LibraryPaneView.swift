@@ -171,7 +171,7 @@ struct LibraryPaneView: View {
     private var libraryHeader: some View {
         HStack(alignment: .center, spacing: Spacing.md) {
             Text("Library")
-                .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                .font(Typography.screenTitle)
                 .tracking(-0.8)
                 .accessibilityFocused($accessibilityFocus, equals: .header)
 
@@ -223,7 +223,7 @@ struct LibraryPaneView: View {
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(Theme.stageSecondary)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 44)
+                        .frame(height: Spacing.touchTarget)
                         .background(
                             tab == t ? Theme.stageRaisedSurface : Color.clear,
                             in: RoundedRectangle(cornerRadius: 15, style: .continuous)
@@ -441,12 +441,8 @@ struct LibraryPaneView: View {
                     onImportFiles()
                 } label: {
                     Label("Import from Files", systemImage: "folder")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(Theme.stagePrimary)
-                        .frame(maxWidth: .infinity)
-                        .frame(minHeight: 56)
-                        .background(Theme.stageSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
+                .buttonStyle(StageSecondaryActionButtonStyle())
             }
             .padding(.horizontal, Spacing.xl3)
             Spacer(minLength: 0)

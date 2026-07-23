@@ -66,11 +66,10 @@ enum StyleSelectionContext: Equatable {
         }
     }
 
-    /// Title for the trailing dismissal action, when the context has one.
-    var secondaryActionTitle: String? {
+    var requiresSelection: Bool {
         switch self {
-        case .quickFilter: nil
-        case .tagImport:   "Skip"
+        case .quickFilter: false
+        case .tagImport:   true
         }
     }
 }
@@ -80,8 +79,8 @@ struct StyleSelectionSheet: View {
     let styles: [Style]
     let selectedStyleID: UUID?
     let onSelect: (Style?) -> Void
-    /// Called when the user dismisses via the context's secondary action.
-    var onSkip: (() -> Void)? = nil
+    /// Import tagging can continue into the existing new-style naming flow.
+    var onAddNewStyle: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
 
@@ -97,14 +96,19 @@ struct StyleSelectionSheet: View {
                     dismiss()
                 }
 
-                if let secondaryActionTitle = context.secondaryActionTitle {
-                    Button(secondaryActionTitle) {
-                        onSkip?()
+                if let onAddNewStyle {
+                    StageSheetActionRow(
+                        title: "Add new style",
+                        systemImage: "plus.circle.fill"
+                    ) {
+                        onAddNewStyle()
                         dismiss()
                     }
-                    .buttonStyle(StageSecondaryActionButtonStyle())
                 }
             }
         }
+        // Import tagging is required. Without this, dragging the sheet down
+        // would remain an unlabeled version of the removed Skip action.
+        .interactiveDismissDisabled(context.requiresSelection)
     }
 }

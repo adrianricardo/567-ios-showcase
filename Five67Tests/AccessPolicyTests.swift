@@ -92,6 +92,45 @@ struct AccessPolicyTests {
         }
     }
 
+    @Test func legacyAppTransactionLookupRequiresAnUnresolvedNoninteractiveRuntime() {
+        let scenarios = [
+            (
+                hasLegacyUnlimited: false,
+                evaluationComplete: false,
+                lookupAllowed: true,
+                expected: true
+            ),
+            (
+                hasLegacyUnlimited: false,
+                evaluationComplete: false,
+                lookupAllowed: false,
+                expected: false
+            ),
+            (
+                hasLegacyUnlimited: true,
+                evaluationComplete: false,
+                lookupAllowed: true,
+                expected: false
+            ),
+            (
+                hasLegacyUnlimited: false,
+                evaluationComplete: true,
+                lookupAllowed: true,
+                expected: false
+            )
+        ]
+
+        for scenario in scenarios {
+            let result = AccessPolicy.shouldRequestLegacyAppTransaction(
+                hasLegacyUnlimited: scenario.hasLegacyUnlimited,
+                legacyEvaluationComplete: scenario.evaluationComplete,
+                automaticLookupAllowed: scenario.lookupAllowed
+            )
+
+            #expect(result == scenario.expected)
+        }
+    }
+
     @Test func existingLibraryIsAlwaysLegacyUnlimited() {
         #expect(AccessPolicy.shouldGrantLegacyUnlimited(
             existingLibraryCount: 1,
@@ -106,17 +145,6 @@ struct AccessPolicyTests {
         ))
     }
 
-    @Test func personalVideoCountExcludesDemoRows() {
-        let personalA = Video(displayName: "A", localFilename: "a.mov", duration: 1)
-        let demo = Video(displayName: "Demo", localFilename: "demo.mov", duration: 1, isDemo: true)
-        let personalB = Video(displayName: "B", localFilename: "b.mov", duration: 1)
-        let all = [personalA, demo, personalB]
-
-        #expect(all.personalVideoCount == 2)
-        #expect(all.personalVideos.count == 2)
-        #expect(!all.personalVideos.contains { $0.isDemo })
-    }
-
     @Test @MainActor func clearingLastPersonalVideoResetsFreeStyleClaim() throws {
         let suiteName = "AccessPolicyClaimReset-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
@@ -127,8 +155,7 @@ struct AccessPolicyTests {
         store.recordStyleUse(salsa)
         #expect(store.claimedFreeStyleID == salsa)
 
-        // A demo-only library (personal count 0 because demo is excluded by the
-        // caller) or a fully cleared library resets the claim.
+        // A fully cleared library resets the claim.
         store.recountPersonalVideos(1)
         #expect(store.claimedFreeStyleID == salsa)
 
