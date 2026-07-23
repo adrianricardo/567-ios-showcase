@@ -1,6 +1,6 @@
 # 0006 — Finish, polish, monetize, and release
 
-**Status:** P3.5 pending for Adrian's additional UI polish and candidate refresh. P4 is paused and returns to pending until that work is committed and re-verified; push, App Review submission, and release remain gated on Adrian's explicit authorization (G5).
+**Status:** Version `1.0.3` build `79` and the first non-consumable IAP were submitted together for App Review on 2026-07-23. Release mode is manual; App Review outcome and explicit release remain pending.
 
 **Milestone:** Finish all in-flight iOS work, commit it, apply the approved design system across the entire user-facing app (including every onboarding beat and the paywall), finish and test a truthful entitlement-backed paywall, and ship the resulting update through TestFlight and App Review.
 
@@ -662,21 +662,23 @@ If App Store Connect or signing access is unavailable, do not claim release. Mar
 | P1 | done | Codex implementation session | 2026-07-16 | Complete coverage matrix, Warm Stage implementation, accessibility/visual evidence, green verification; atomic commit `7a1842b` |
 | P2 | done | Codex implementation session | 2026-07-17 | Implementation, cap-policy/UI tests, and 11-scenario StoreKit runtime matrix green on iOS 26.1 (23B86); physical TestFlight validation remains P4-owned |
 | P3 | done | Codex implementation session | 2026-07-19 | Integrated regression, accessibility, visual, Release-bundle, and StoreKit evidence green; release fixes committed at `e01074e` |
-| P3.5 | pending | Adrian / next implementation agent | 2026-07-20 | Additional pending work, primarily UI polish; must produce a refreshed exact candidate |
-| P4 | pending | - | 2026-07-20 | Paused before archive/upload; resumes only after P3.5; Gates G4–G5 still required |
+| P3.5 | done | Codex implementation session | 2026-07-23 | UI polish and candidate refresh committed at `77fbc465` |
+| P4 | submitted | Codex + Adrian | 2026-07-23 | Candidate `77fbc465`, version `1.0.3` build `79`, and `567 Lifetime Unlock` submitted together; manual release awaits App Review |
 
-Status values: `pending`, `in-progress`, `blocked`, `done`.
+Status values: `pending`, `in-progress`, `blocked`, `submitted`, `done`.
 
 ## Handoff
 
-Current state: P0 is complete at clean commit `2bad989`; P1 is complete at atomic commit `7a1842b`; P2 is complete at atomic commit `5d5cf0b`; and P3 implementation, release-candidate QA, and concrete release-defect fixes were completed for candidate implementation commit `e01074e168a26e7c0443658a778e4182d968c02c`. That candidate remains a valid historical verification point but is no longer the intended submission binary because additional work is pending.
+Current state: P0 is complete at clean commit `2bad989`; P1 is complete at atomic commit `7a1842b`;
+P2 is complete at atomic commit `5d5cf0b`; P3 implementation and release-candidate QA were completed
+at `e01074e168a26e7c0443658a778e4182d968c02c`; and the P3.5 polish/candidate refresh completed at
+`77fbc4651b6649e0897c1688510e82316d82a5c2`.
 
-On 2026-07-20 Adrian clarified that more app work remains, primarily UI polish, and will continue it
-in another agent session. Resume at P3.5: discover and complete that pending scope, re-run the affected
-release gates, and record a new exact candidate SHA. P4 preparation evidence already gathered remains
-in `docs/p4-submission.md`, but P4 itself is pending. Confirm the next unused marketing version and
-highest uploaded build in App Store Connect only after P3.5 freezes the new candidate. No P4 archive,
-upload, submission, push, or release action has occurred.
+On 2026-07-23, version `1.0.3` build `79` was uploaded, processed, selected, and submitted for App
+Review together with the first non-consumable `567 Lifetime Unlock`. The release remains manual.
+Resume by monitoring App Review and reviewer communication; after approval, obtain explicit
+authorization before manually releasing the update. The physical TestFlight G4 matrix below remains
+unrecorded and must not be retroactively claimed as passed.
 
 P3 implementation state (2026-07-19): release-only builds no longer compile UI-test launch arguments or deterministic fixture seeding, and `Five67.storekit` is excluded from the production app bundle while remaining attached to the Xcode StoreKit scheme. Forced UI-test access no longer starts live StoreKit observation, preventing Apple account UI from contaminating deterministic accessibility evidence. The global Add action now uses one durable router event: it selects Feed before emitting a fresh request token, eliminating the intermittent lost-dialog race while keeping every Add entry point on the same implementation path.
 
@@ -775,8 +777,10 @@ Approval record:
 - **G1 authorized (2026-07-16):** Adrian explicitly instructed this implementation session to implement the plan sequentially beginning with P0, preserve the approved Groups 0–5 baseline exactly, and obey the approval gates. This authorizes the P0 baseline commits after the required evidence is green.
 - **G2 authorized (2026-07-17):** Adrian approved the unlimited-videos/styles-only release cut and removal of the unimplemented iCloud cleanup claim.
 - **G3 satisfied (2026-07-17):** Adrian accepted `docs/design-system-coverage.md` and the representative screenshots under `build/release-evidence/design/`.
-- **G4–G5 not yet authorized/satisfied.**
+- **G4 remains unrecorded. G5 authorized App Review submission on 2026-07-23; manual release remains
+  separately gated.**
 
 Open questions:
 
-1. Gate G5: confirm whether the implementing agent may push and submit, or must stop after TestFlight validation for Adrian to perform final submission.
+1. What is Apple's App Review outcome, and is reviewer follow-up required?
+2. After approval, when should Adrian authorize the manual release?
