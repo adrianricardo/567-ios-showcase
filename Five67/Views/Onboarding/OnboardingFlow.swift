@@ -91,6 +91,9 @@ struct OnboardingFlow: View {
 #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-Five67UITestOnboardingCompletionFixture") {
                 beat = .paywall
+            } else if ProcessInfo.processInfo.arguments.contains("-Five67UITestOnboardingPayoffFixture") {
+                motivation = .practice
+                beat = .payoff
             }
 #endif
             // The motivation answer is session-only by contract, so a relaunch

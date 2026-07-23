@@ -1026,13 +1026,17 @@ struct VideoFeedView: View {
             activeMoveID = nil
             return
         }
+        // The TabView keeps Feed mounted while Library or Styles is visible.
+        // Dataset changes (including a style filter change) may still sync this
+        // window, but they must never start an off-screen player.
+        let shouldAutoplay = autoplay && router.selectedTab == .feed
         var keep = Set<UUID>()
         for index in windowIndices {
             let video = videos[index]
             keep.insert(video.id)
             let controller = ensureController(for: video)
             if index == selectedIndex {
-                activate(controller, video: video, autoplay: autoplay)
+                activate(controller, video: video, autoplay: shouldAutoplay)
             } else {
                 controller.isMuted = true
                 controller.pause()
@@ -1077,12 +1081,19 @@ struct VideoFeedView: View {
                 controller.setActiveRange(start: 0, end: effectiveDuration(for: video))
             }
         }
-        if autoplay { controller.play() }
+        if autoplay {
+            controller.play()
+        } else {
+            controller.pause()
+        }
 
         if let pending = pendingFeedMove, pending.videoID == video.id {
             activeMoveID = pending.moveID
             controller.playRange(start: pending.time, end: pending.endTime)
             pendingFeedMove = nil
+        }
+        if !autoplay {
+            controller.pause()
         }
     }
 

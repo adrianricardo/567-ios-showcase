@@ -350,6 +350,74 @@ final class TabBarVerifyTests: XCTestCase {
         XCTAssertTrue(app.buttons["Bachata"].exists)
     }
 
+    func testStyleSelectionNavigatesToFeed() throws {
+        launchApp(additionalArguments: ["-Five67UITestSeedLibrary"])
+
+        let tabBar = app.tabBars.firstMatch
+        let stylesTab = tabBar.buttons["Styles"]
+        XCTAssertTrue(stylesTab.waitForExistence(timeout: 5))
+        stylesTab.tap()
+
+        let salsa = app.buttons["Salsa"]
+        XCTAssertTrue(salsa.waitForExistence(timeout: 3))
+        salsa.tap()
+
+        XCTAssertTrue(
+            tabBar.buttons["Feed"].isSelected,
+            "The Styles tab changes the active practice context and must return to Feed"
+        )
+    }
+
+    func testLibrarySettingsOwnsExportAndReplayOnboarding() throws {
+        launchApp(additionalArguments: ["-Five67UITestSeedLibrary"])
+
+        let libraryTab = app.tabBars.firstMatch.buttons["Library"]
+        XCTAssertTrue(libraryTab.waitForExistence(timeout: 5))
+        libraryTab.tap()
+
+        let settings = app.buttons["Settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 3))
+        settings.tap()
+
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Upgrade 567"].exists)
+        XCTAssertTrue(app.buttons["Replay Onboarding"].exists)
+
+        let exportLibrary = app.buttons["Export Library"]
+        XCTAssertTrue(exportLibrary.waitForExistence(timeout: 3))
+        exportLibrary.tap()
+
+        XCTAssertTrue(app.staticTexts["Export Library"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Full Export (Videos + Metadata)"].exists)
+        XCTAssertTrue(app.buttons["Metadata Only (No Videos)"].exists)
+        XCTAssertTrue(app.buttons["Cancel"].exists)
+    }
+
+    func testReplayOnboardingRestartsAtTheHook() throws {
+        launchApp(additionalArguments: ["-Five67UITestSeedLibrary"])
+
+        let libraryTab = app.tabBars.firstMatch.buttons["Library"]
+        XCTAssertTrue(libraryTab.waitForExistence(timeout: 5))
+        libraryTab.tap()
+
+        let settings = app.buttons["Settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 3))
+        settings.tap()
+
+        let replayEntry = app.buttons["Replay Onboarding"]
+        XCTAssertTrue(replayEntry.waitForExistence(timeout: 3))
+        replayEntry.tap()
+
+        XCTAssertTrue(app.staticTexts["Replay onboarding?"].waitForExistence(timeout: 3))
+        app.buttons["Replay onboarding"].tap()
+
+        XCTAssertTrue(
+            app.staticTexts["Never forget a turn or combo again."].waitForExistence(timeout: 5),
+            "Replaying onboarding should replace Settings with the first onboarding beat"
+        )
+        XCTAssertTrue(app.buttons["Get started"].exists)
+    }
+
     func testScreenshotsAllTabs() throws {
         launchApp()
         let tabBar = app.tabBars.firstMatch

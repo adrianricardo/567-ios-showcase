@@ -91,6 +91,14 @@ struct OnboardingPreferences {
         clearSeedVideoID()
     }
 
+    /// Starts the onboarding narrative again without touching the SwiftData
+    /// library. A prior seed association is cleared so replaying never edits or
+    /// reuses a video behind the user's back.
+    func replayOnboarding() {
+        clearSeedVideoID()
+        markInProgress()
+    }
+
     // MARK: - Seed video
 
     var seedVideoID: UUID? {

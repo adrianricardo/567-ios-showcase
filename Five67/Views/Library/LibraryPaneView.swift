@@ -47,7 +47,6 @@ struct LibraryPaneView: View {
     @Environment(StyleStore.self) private var styleStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
-    @Environment(AppRouter.self) private var router
     @Environment(UnlockStore.self) private var unlockStore
 
     @Query(sort: [SortDescriptor(\Video.importedAt, order: .reverse)])
@@ -57,6 +56,7 @@ struct LibraryPaneView: View {
 
     @AppStorage("libraryPaneTab") private var tab: PaneTab = .moves
     @State private var search = ""
+    @State private var showSettings = false
     @AccessibilityFocusState private var accessibilityFocus: AccessibilityFocus?
 
     @State private var deleteVideoTarget: Video?
@@ -68,16 +68,6 @@ struct LibraryPaneView: View {
     @State private var unlockPrompt: UnlockPromptReason?
     @State private var pendingFilterStyle: Style?
     @State private var unlockSucceeded = false
-
-    // Export
-    @State private var isExporting = false
-    @State private var exportError: String?
-    @State private var exportDocument: LibraryExportDocument?
-    @State private var pendingExportResult: LibraryExportResult?
-    @State private var lastExportResult: LibraryExportResult?
-    @State private var showExporterSheet = false
-    @State private var showExportSummary = false
-    @State private var showExportTypeDialog = false
 
     private var trimmedSearch: String {
         search.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -135,19 +125,11 @@ struct LibraryPaneView: View {
         .foregroundStyle(Theme.stagePrimary)
         .background(Theme.stageBackground)
         .preferredColorScheme(.dark)
-        .photosExportAttachments(
-            isExporting: $isExporting,
-            showExportTypeDialog: $showExportTypeDialog,
-            showExporterSheet: $showExporterSheet,
-            showExportSummary: $showExportSummary,
-            exportDocument: exportDocument,
-            exportError: $exportError,
-            lastExportResult: lastExportResult,
-            defaultFilename: defaultExportFilename(),
-            onFullExport: { Task { await runExport(includeVideos: true) } },
-            onMetadataExport: { Task { await runExport(includeVideos: false) } },
-            onExporterResult: handleExporterResult
-        )
+        .fullScreenCover(isPresented: $showSettings) {
+            NavigationStack {
+                LibrarySettingsView()
+            }
+        }
         .sheet(item: $deleteVideoTarget) { video in
             VideoDeleteSheet(video: video) { deleteVideo(video) }
         }
@@ -178,6 +160,22 @@ struct LibraryPaneView: View {
             Spacer()
 
             Button {
+                Haptics.light()
+                showSettings = true
+            } label: {
+                Image(systemName: "gearshape.fill")
+                    .font(.body.weight(.bold))
+                    .foregroundStyle(Theme.stagePrimary)
+                    .frame(width: Spacing.touchTarget, height: Spacing.touchTarget)
+                    .background(Theme.stageSurface, in: Circle())
+                    .overlay { Circle().stroke(stageStroke, lineWidth: 1) }
+                    .contentShape(Circle())
+            }
+            .buttonStyle(StageSelectableRowButtonStyle())
+            .accessibilityLabel("Settings")
+            .accessibilityHint("Opens library settings")
+
+            Button {
                 showStylePicker = true
             } label: {
                 HStack(spacing: Spacing.sm) {
@@ -188,6 +186,7 @@ struct LibraryPaneView: View {
                     }
                     Text(styleStore.label)
                         .font(.caption.weight(.bold))
+                        .lineLimit(1)
                     Image(systemName: "chevron.down")
                         .font(.caption2.weight(.bold))
                 }
@@ -529,185 +528,5 @@ struct LibraryPaneView: View {
         let style = pendingFilterStyle
         pendingFilterStyle = nil
         applyStyleFilter(style)
-    }
-
-    // MARK: - Export
-
-    private func handleExporterResult(_ result: Result<URL, Error>) {
-        switch result {
-        case .success:
-            lastExportResult = pendingExportResult
-            showExportSummary = true
-        case .failure(let err):
-            if (err as NSError).code != NSUserCancelledError {
-                exportError = err.localizedDescription
-            }
-        }
-        pendingExportResult = nil
-        exportDocument = nil
-    }
-
-    @MainActor
-    private func runExport(includeVideos: Bool) async {
-        guard !isExporting else { return }
-        isExporting = true
-        defer { isExporting = false }
-
-        await Task.yield()
-
-        do {
-            try modelContext.save()
-            let container = modelContext.container
-            let result = try await Task.detached(priority: .userInitiated) {
-                let exporter = LibraryExporter(modelContainer: container)
-                return try await exporter.export(includeVideos: includeVideos)
-            }.value
-            pendingExportResult = result
-            exportDocument = LibraryExportDocument(zipURL: result.zipURL)
-            showExporterSheet = true
-        } catch {
-            exportError = error.localizedDescription
-        }
-    }
-
-    private func defaultExportFilename() -> String {
-        let df = DateFormatter()
-        df.dateFormat = "yyyy-MM-dd-HHmm"
-        let stem = (pendingExportResult?.includesVideoFiles ?? true) ? "Library" : "Metadata"
-        return "567-\(stem)-\(df.string(from: Date()))"
-    }
-}
-
-// MARK: - Export modifiers (kept off the main body for readability)
-
-extension View {
-    func photosExportAttachments(
-        isExporting: Binding<Bool>,
-        showExportTypeDialog: Binding<Bool>,
-        showExporterSheet: Binding<Bool>,
-        showExportSummary: Binding<Bool>,
-        exportDocument: LibraryExportDocument?,
-        exportError: Binding<String?>,
-        lastExportResult: LibraryExportResult?,
-        defaultFilename: String,
-        onFullExport: @escaping () -> Void,
-        onMetadataExport: @escaping () -> Void,
-        onExporterResult: @escaping (Result<URL, Error>) -> Void
-    ) -> some View {
-        self
-            .confirmationDialog(
-                "Export Library",
-                isPresented: showExportTypeDialog,
-                titleVisibility: .visible
-            ) {
-                Button("Full Export (Videos + Metadata)", action: onFullExport)
-                Button("Metadata Only (No Videos)", action: onMetadataExport)
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Full exports include all video files and can be large. Metadata-only exports are quick and contain just your moves and library structure.")
-            }
-            .fileExporter(
-                isPresented: showExporterSheet,
-                document: exportDocument,
-                contentType: .zip,
-                defaultFilename: defaultFilename,
-                onCompletion: onExporterResult
-            )
-            .alert(
-                "Export failed",
-                isPresented: Binding(
-                    get: { exportError.wrappedValue != nil },
-                    set: { if !$0 { exportError.wrappedValue = nil } }
-                )
-            ) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(exportError.wrappedValue ?? "")
-            }
-            .sheet(isPresented: showExportSummary) {
-                if let result = lastExportResult {
-                    PaneExportSummarySheet(result: result)
-                }
-            }
-            .overlay {
-                if isExporting.wrappedValue && !showExporterSheet.wrappedValue {
-                    ZStack {
-                        Color.black.opacity(0.25).ignoresSafeArea()
-                        VStack(spacing: Spacing.md) {
-                            ProgressView().controlSize(.large)
-                            Text("Preparing export…").font(.headline)
-                            Text("This may take a moment for large libraries.")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                        }
-                        .padding(Spacing.xl2)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-                        .padding(Spacing.xl5)
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Preparing export")
-                        .accessibilityValue("This may take a moment for large libraries")
-                    }
-                    .accessibilityAddTraits(.isModal)
-                    .transition(.opacity)
-                }
-            }
-    }
-}
-
-struct PaneExportSummarySheet: View {
-    let result: LibraryExportResult
-    @Environment(\.dismiss) private var dismiss
-    @State private var detailsExpanded = false
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Label("Export complete", systemImage: "checkmark.seal.fill")
-                        .font(.headline)
-                        .foregroundStyle(.green)
-                }
-                Section("Contents") {
-                    LabeledContent("Videos", value: "\(result.videoCount)")
-                    LabeledContent("Moves",  value: "\(result.moveCount)")
-                }
-                Section("Integrity") {
-                    LabeledContent("Missing files",   value: "\(result.missingFiles.count)")
-                    LabeledContent("Orphan files",    value: "\(result.orphanFiles.count)")
-                    LabeledContent("Orphan moves",    value: "\(result.orphanMoveCount)")
-                    if result.hasIntegrityIssues {
-                        DisclosureGroup("Show details", isExpanded: $detailsExpanded) {
-                            if !result.missingFiles.isEmpty {
-                                Text("Missing files").font(.subheadline.weight(.semibold))
-                                ForEach(result.missingFiles, id: \.self) { name in
-                                    Text(name).font(.footnote.monospaced())
-                                }
-                            }
-                            if !result.orphanFiles.isEmpty {
-                                Text("Orphan files").font(.subheadline.weight(.semibold))
-                                ForEach(result.orphanFiles, id: \.self) { name in
-                                    Text(name).font(.footnote.monospaced())
-                                }
-                            }
-                            if result.orphanMoveCount > 0 {
-                                Text("\(result.orphanMoveCount) move(s) have no associated video.")
-                                    .font(.footnote)
-                            }
-                        }
-                    } else {
-                        Label("No issues found", systemImage: "checkmark.circle")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .navigationTitle("Export summary")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
     }
 }

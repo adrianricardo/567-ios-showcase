@@ -2,9 +2,9 @@ import SwiftUI
 import SwiftData
 
 /// Styles tab. Lists every `Style`, lets the user pick the active one, add a
-/// new custom style, or rename existing custom ones. Selecting a style returns
-/// to the Feed tab automatically. Defaults (Cumbia / Salsa / Bachata) are not
-/// renameable and not deletable.
+/// new custom style, or rename existing custom ones. Selecting a style changes
+/// the active practice context, returns to Feed, and starts that style playing.
+/// Defaults (Cumbia / Salsa / Bachata) are not renameable or deletable.
 struct StylePickerPaneView: View {
     private enum PendingStyleAction {
         case select(UUID)
@@ -27,38 +27,15 @@ struct StylePickerPaneView: View {
     @State private var pendingStyleAction: PendingStyleAction?
     @State private var unlockSucceeded = false
 
-    // Export
-    @State private var isExporting = false
-    @State private var exportError: String?
-    @State private var exportDocument: LibraryExportDocument?
-    @State private var pendingExportResult: LibraryExportResult?
-    @State private var lastExportResult: LibraryExportResult?
-    @State private var showExporterSheet = false
-    @State private var showExportSummary = false
-    @State private var showExportTypeDialog = false
-
     var body: some View {
         VStack(spacing: Spacing.none) {
             header
             content
-            exportFooter
+            unlockFooter
         }
         .foregroundStyle(Theme.stagePrimary)
         .background(Theme.stageBackground)
         .preferredColorScheme(.dark)
-        .photosExportAttachments(
-            isExporting: $isExporting,
-            showExportTypeDialog: $showExportTypeDialog,
-            showExporterSheet: $showExporterSheet,
-            showExportSummary: $showExportSummary,
-            exportDocument: exportDocument,
-            exportError: $exportError,
-            lastExportResult: lastExportResult,
-            defaultFilename: defaultExportFilename(),
-            onFullExport: { Task { await runExport(includeVideos: true) } },
-            onMetadataExport: { Task { await runExport(includeVideos: false) } },
-            onExporterResult: handleExporterResult
-        )
         .sheet(isPresented: $showRenameSheet) {
             if let style = renameTarget {
                 RenameSheet(
@@ -78,9 +55,7 @@ struct StylePickerPaneView: View {
             ) { newName in
                 let style = Style(name: newName)
                 modelContext.insert(style)
-                unlockStore.recordStyleUse(style.id)
-                styleStore.activeStyle = style
-                router.selectedTab = .feed
+                select(style)
             }
         }
         .sheet(item: $unlockPrompt, onDismiss: handleUnlockSheetDismiss) { reason in
@@ -206,44 +181,24 @@ struct StylePickerPaneView: View {
         router.selectedTab = .feed
     }
 
-    // MARK: - Export
-
-    private var exportFooter: some View {
-        VStack(spacing: Spacing.xs) {
-            if !unlockStore.isUnlocked {
-                Button {
-                    pendingStyleAction = nil
-                    unlockPrompt = .durableEntry
-                } label: {
-                    Label("Unlock unlimited videos & styles", systemImage: "infinity")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(Theme.stagePrimary)
-                        .padding(.vertical, Spacing.smPlus)
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-
+    @ViewBuilder
+    private var unlockFooter: some View {
+        if !unlockStore.isUnlocked {
             Button {
-                showExportTypeDialog = true
+                pendingStyleAction = nil
+                unlockPrompt = .durableEntry
             } label: {
-                HStack(spacing: Spacing.sm) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.subheadline.weight(.semibold))
-                    Text("Export Library")
-                        .font(.subheadline.weight(.medium))
-                }
-                .foregroundStyle(Theme.stageSecondary)
-                .padding(.vertical, Spacing.smPlus)
-                .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
+                Label("Unlock unlimited videos & styles", systemImage: "infinity")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(Theme.stagePrimary)
+                    .padding(.vertical, Spacing.smPlus)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .disabled(isExporting)
+            .padding(.horizontal, Spacing.lg)
+            .padding(.bottom, Spacing.bottomBarClearance)
         }
-        .padding(.horizontal, Spacing.lg)
-        .padding(.bottom, Spacing.bottomBarClearance)
     }
 
     private func requestStyleCreation() {
@@ -272,49 +227,5 @@ struct StylePickerPaneView: View {
         guard unlockSucceeded else { return }
         unlockSucceeded = false
         resumePendingStyleAction()
-    }
-
-    private func handleExporterResult(_ result: Result<URL, Error>) {
-        switch result {
-        case .success:
-            lastExportResult = pendingExportResult
-            showExportSummary = true
-        case .failure(let err):
-            if (err as NSError).code != NSUserCancelledError {
-                exportError = err.localizedDescription
-            }
-        }
-        pendingExportResult = nil
-        exportDocument = nil
-    }
-
-    @MainActor
-    private func runExport(includeVideos: Bool) async {
-        guard !isExporting else { return }
-        isExporting = true
-        defer { isExporting = false }
-
-        await Task.yield()
-
-        do {
-            try modelContext.save()
-            let container = modelContext.container
-            let result = try await Task.detached(priority: .userInitiated) {
-                let exporter = LibraryExporter(modelContainer: container)
-                return try await exporter.export(includeVideos: includeVideos)
-            }.value
-            pendingExportResult = result
-            exportDocument = LibraryExportDocument(zipURL: result.zipURL)
-            showExporterSheet = true
-        } catch {
-            exportError = error.localizedDescription
-        }
-    }
-
-    private func defaultExportFilename() -> String {
-        let df = DateFormatter()
-        df.dateFormat = "yyyy-MM-dd-HHmm"
-        let stem = (pendingExportResult?.includesVideoFiles ?? true) ? "Library" : "Metadata"
-        return "567-\(stem)-\(df.string(from: Date()))"
     }
 }

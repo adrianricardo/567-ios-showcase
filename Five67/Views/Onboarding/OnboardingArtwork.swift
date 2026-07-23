@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 
 struct Five67BrandMark: View {
@@ -20,10 +21,8 @@ struct Five67BrandMark: View {
 
 /// Live product composition shown on the Hook and Payoff beats.
 ///
-/// This deliberately builds from the app's *real* surfaces — `StageThumbnailView`
-/// (including its now-playing cue), the move row's name/duration pairing, and the
-/// looping progress bar — instead of a screenshot, so onboarding can never drift
-/// out of date with the shipped UI.
+/// The bundled clip plays inside the app's real move surfaces so the core
+/// product promise is demonstrated instead of represented by a placeholder.
 struct OnboardingProductPreview: View {
     let reduceMotion: Bool
     var accent: Color = StyleAccentPalette.salsa.color
@@ -33,6 +32,10 @@ struct OnboardingProductPreview: View {
     var showsUnnamedRow = false
 
     @State private var loopProgress: CGFloat = 0.12
+
+    private var demoURL: URL? {
+        Bundle.main.url(forResource: "OnboardingDemo", withExtension: "mp4")
+    }
 
     var body: some View {
         VStack(spacing: Spacing.md) {
@@ -67,15 +70,16 @@ struct OnboardingProductPreview: View {
     private var previewStage: some View {
         VStack(spacing: Spacing.sm) {
             ZStack {
-                LinearGradient(
-                    colors: [Theme.stageRaisedSurface, Theme.stageSurface],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+                Color.black
 
-                Image(systemName: "figure.dance")
-                    .font(.system(size: 54, weight: .medium))
-                    .foregroundStyle(accent)
+                if let demoURL {
+                    OnboardingLoopingVideo(
+                        url: demoURL,
+                        shouldPlay: !reduceMotion,
+                        progress: $loopProgress
+                    )
+                    .accessibilityIdentifier("onboardingDemoVideo")
+                }
 
                 VStack {
                     Spacer()
@@ -107,13 +111,106 @@ struct OnboardingProductPreview: View {
             .frame(height: 6)
         }
         .accessibilityHidden(true)
-        .onAppear {
-            guard !reduceMotion else {
-                loopProgress = 0.72
-                return
+        .onChange(of: reduceMotion, initial: true) { _, isReduced in
+            if isReduced {
+                loopProgress = 0
             }
-            withAnimation(.linear(duration: 5.7).repeatForever(autoreverses: false)) {
-                loopProgress = 0.94
+        }
+    }
+}
+
+/// A silent, control-free player dedicated to the bundled onboarding proof clip.
+/// `AVPlayerLooper` owns the repeat boundary so the loop remains seamless.
+private struct OnboardingLoopingVideo: UIViewRepresentable {
+    let url: URL
+    let shouldPlay: Bool
+    @Binding var progress: CGFloat
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(progress: $progress)
+    }
+
+    func makeUIView(context: Context) -> PlayerSurfaceView {
+        let view = PlayerSurfaceView()
+        view.videoGravity = .resizeAspectFill
+        view.player = context.coordinator.player
+        context.coordinator.load(url)
+        updatePlayback(context.coordinator)
+        return view
+    }
+
+    func updateUIView(_ view: PlayerSurfaceView, context: Context) {
+        context.coordinator.progress = $progress
+        updatePlayback(context.coordinator)
+    }
+
+    static func dismantleUIView(_ view: PlayerSurfaceView, coordinator: Coordinator) {
+        coordinator.stop()
+        view.player = nil
+    }
+
+    private func updatePlayback(_ coordinator: Coordinator) {
+        if shouldPlay {
+            coordinator.player.play()
+        } else {
+            coordinator.player.pause()
+            coordinator.player.seek(to: .zero)
+        }
+    }
+
+    @MainActor
+    final class Coordinator {
+        let player = AVQueuePlayer()
+        var progress: Binding<CGFloat>
+
+        private var looper: AVPlayerLooper?
+        private var timeObserver: Any?
+        private var loadedURL: URL?
+
+        init(progress: Binding<CGFloat>) {
+            self.progress = progress
+            player.isMuted = true
+            player.preventsDisplaySleepDuringVideoPlayback = false
+            timeObserver = player.addPeriodicTimeObserver(
+                forInterval: CMTime(value: 1, timescale: 30),
+                queue: .main
+            ) { [weak self] time in
+                MainActor.assumeIsolated {
+                    guard let self,
+                          let duration = self.player.currentItem?.duration.seconds,
+                          duration.isFinite,
+                          duration > 0 else { return }
+                    self.progress.wrappedValue = min(max(time.seconds / duration, 0), 1)
+                }
+            }
+        }
+
+        func load(_ url: URL) {
+            guard loadedURL != url else { return }
+            loadedURL = url
+            looper = nil
+            player.removeAllItems()
+            looper = AVPlayerLooper(
+                player: player,
+                templateItem: AVPlayerItem(url: url)
+            )
+        }
+
+        func stop() {
+            player.pause()
+            looper = nil
+            player.removeAllItems()
+            if let timeObserver {
+                player.removeTimeObserver(timeObserver)
+                self.timeObserver = nil
+            }
+        }
+
+        deinit {
+            MainActor.assumeIsolated {
+                if let timeObserver {
+                    player.removeTimeObserver(timeObserver)
+                }
             }
         }
     }

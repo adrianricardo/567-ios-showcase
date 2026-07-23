@@ -47,6 +47,13 @@ struct OnboardingGateView<Content: View>: View {
                 onboardingSessionStarted = true
             }
         }
+        .onChange(of: statusRaw) { _, newValue in
+            guard
+                let newStatus = OnboardingStatus(rawValue: newValue),
+                OnboardingGatePolicy.shouldPresent(status: newStatus)
+            else { return }
+            onboardingSessionStarted = true
+        }
     }
 
     private func completeOnboarding(result: FeedSelection?) {

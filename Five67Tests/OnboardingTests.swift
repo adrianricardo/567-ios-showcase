@@ -90,6 +90,24 @@ struct OnboardingTests {
         #expect(preferences.status == .inProgress)
     }
 
+    @Test func replaying_onboarding_resets_only_onboarding_progress() throws {
+        let suiteName = "OnboardingReplayTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let unrelatedLibraryPreference = "libraryPaneTab"
+        defaults.set("videos", forKey: unrelatedLibraryPreference)
+
+        let preferences = OnboardingPreferences(defaults: defaults)
+        preferences.markCompleted()
+        preferences.saveSeedVideoID(UUID())
+        preferences.replayOnboarding()
+
+        #expect(preferences.status == .inProgress)
+        #expect(preferences.seedVideoID == nil)
+        #expect(defaults.string(forKey: unrelatedLibraryPreference) == "videos")
+    }
+
     @Test func each_motivation_maps_to_its_approved_payoff_copy() {
         #expect(OnboardingMotivation.remember.label == "Remember moves when I'm out dancing")
         #expect(OnboardingMotivation.practice.label == "Practice what I learned between classes")
