@@ -24,6 +24,7 @@ If `brain/` is missing (fresh clone), clone `567-platform` as a sibling of this 
 - Prefer the repo `Makefile` over direct Xcode UI work.
 - Default command: `make` (`build-and-run`).
 - Use `make build` for compile checks and `make test` for fast verification.
+- During a coherent UI iteration round, use `make build` plus a focused simulator/browser check after each small change; run the full `make test` suite once at the end of the round rather than after every micro-edit. Run targeted tests earlier when the changed behavior cannot be verified visually or touches a higher-risk boundary.
 - `make run-fresh` uninstalls first (wipes UserDefaults + SwiftData), so the **onboarding flow shows again** every launch — use it when iterating on onboarding. The paywall button stays disabled here (StoreKit config isn't injected via `simctl`).
 - `make run-xcode` launches through Xcode's scheme so the local `Five67.storekit` config loads and the **paywall/purchase button works**. It's the only CLI path that activates StoreKit.
 - `make ui-test` is intentionally opt-in and currently a placeholder until a UI test target exists.
