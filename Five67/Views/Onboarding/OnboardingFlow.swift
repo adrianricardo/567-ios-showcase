@@ -376,6 +376,8 @@ struct OnboardingFlow: View {
             secondaryFinishTitle: "I'll do this later",
             showsTitle: false,
             progress: Beat.editor.progress,
+            // Explicit opt-in. The editor never infers tutorial intent.
+            guidedTutorial: .onboarding,
             onSecondaryFinish: { finishEditor() },
             onFinish: { _ in finishEditor() }
         )
