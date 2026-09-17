@@ -1,8 +1,9 @@
 # 567 — Onboarding & Freemium Copy (spec 0005)
 
-Companion to `specs/0005-freemium-unlock-smart-import.md`. Holds the screen-level blueprint, draft copy, and the Codex second-opinion critique. Generated 2026-07-07 via `/app-onboarding-questionnaire` + a Codex adversarial review.
+Companion to `specs/archive/0005-freemium-unlock-smart-import.md`. Holds the screen-level blueprint, draft copy, and the Codex second-opinion critique. Generated 2026-07-07 via `/app-onboarding-questionnaire` + a Codex adversarial review.
 
-> **SUPERSEDED (2026-07-21) by `specs/0007-onboarding-core-ui-redesign.plan.md`.**
+> **SUPERSEDED (2026-07-21) by
+> `specs/done/0007-onboarding-core-ui-redesign.plan.md`.**
 > The 12-beat blueprint below, the multi-select styles/volume questions, and the
 > **10-video** free cap are all replaced by 0007's approved sequence and its
 > **3 personal videos** cap. Kept for the copy drafts and the Codex critique

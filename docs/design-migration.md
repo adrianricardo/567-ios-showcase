@@ -1,6 +1,6 @@
 # 567 iOS design migration
 
-> **Status: Groups 0–5 implemented and approved (2026-07-16).** The staged plan below is preserved as the historical implementation record. App-wide coverage beyond these original migration groups remains separately scoped in `specs/0006-release-closure.plan.md` P1.
+> **Status: Groups 0–5 implemented and approved (2026-07-16).** The staged plan below is preserved as the historical implementation record. App-wide coverage beyond these original migration groups remains separately scoped in `specs/pending/0006-release-closure.plan.md` P1.
 
 ## Implementation record
 

@@ -1,6 +1,10 @@
 # 0006 — Finish, polish, monetize, and release
 
-**Status:** Version `1.0.3` build `79` and the first non-consumable IAP were submitted together for App Review on 2026-07-23. Release mode is manual; App Review outcome and explicit release remain pending.
+**Status:** Version `1.0.3` build `81` and the `567 Lifetime Unlock` IAP were
+resubmitted together on 2026-09-15 after the Guideline 2.1(b) rejection. Both
+items showed `Waiting for Review` on that date; the live status has not been
+rechecked during repository reconciliation. Release mode is manual; App Review
+outcome and explicit release authorization remain pending in this record.
 
 **Milestone:** Finish all in-flight iOS work, commit it, apply the approved design system across the entire user-facing app (including every onboarding beat and the paywall), finish and test a truthful entitlement-backed paywall, and ship the resulting update through TestFlight and App Review.
 
@@ -26,8 +30,8 @@ Do not start or include any of the following in this release unless Adrian chang
 - New accounts, backend integration, analytics, or tracking.
 - V1/V2/V3 SwiftData schema pruning.
 - Library-versus-Feed information-architecture reconsideration.
-- Class recap sharing (`specs/0004-*`).
-- Creator funnel work (`specs/0003-*`).
+- Class recap sharing (`specs/pending/0004-*`).
+- Creator funnel work (`specs/pending/0003-*`).
 - Marketplace/backend work.
 - A new app-wide architecture or parallel state machine.
 
@@ -40,7 +44,7 @@ Read these before changing code:
 3. `docs/design-decisions.md`
 4. `docs/design-migration.md`
 5. `docs/design-foundation/proposal.md`
-6. `specs/0005-freemium-unlock-smart-import.md` sections 2–4 and 8–9
+6. `specs/archive/0005-freemium-unlock-smart-import.md` sections 2–4 and 8–9
 7. `docs/onboarding-0005.md`
 8. `docs/launch-punch-list.md`
 9. This plan
@@ -210,7 +214,7 @@ Turn the existing approved dirty Groups 0–5 work into a verified, documented b
 Prefer these two commits:
 
 1. `Agent <name>: add v1.1 release closure plan`
-   - `specs/0006-release-closure.plan.md`
+   - `specs/pending/0006-release-closure.plan.md`
 2. `Agent <name>: complete Warm Stage migration`
    - every existing Groups 0–5 source/test/design-doc file, explicitly listed to `scripts/atomic_commit.sh`
 
@@ -663,7 +667,7 @@ If App Store Connect or signing access is unavailable, do not claim release. Mar
 | P2 | done | Codex implementation session | 2026-07-17 | Implementation, cap-policy/UI tests, and 11-scenario StoreKit runtime matrix green on iOS 26.1 (23B86); physical TestFlight validation remains P4-owned |
 | P3 | done | Codex implementation session | 2026-07-19 | Integrated regression, accessibility, visual, Release-bundle, and StoreKit evidence green; release fixes committed at `e01074e` |
 | P3.5 | done | Codex implementation session | 2026-07-23 | UI polish and candidate refresh committed at `77fbc465` |
-| P4 | submitted | Codex + Adrian | 2026-07-23 | Candidate `77fbc465`, version `1.0.3` build `79`, and `567 Lifetime Unlock` submitted together; manual release awaits App Review |
+| P4 | submitted | Codex + Adrian | 2026-09-15 | Build `1.0.3 (81)` and `567 Lifetime Unlock` resubmitted together; both showed `Waiting for Review` on this date |
 
 Status values: `pending`, `in-progress`, `blocked`, `submitted`, `done`.
 
@@ -676,9 +680,23 @@ at `e01074e168a26e7c0443658a778e4182d968c02c`; and the P3.5 polish/candidate ref
 
 On 2026-07-23, version `1.0.3` build `79` was uploaded, processed, selected, and submitted for App
 Review together with the first non-consumable `567 Lifetime Unlock`. The release remains manual.
-Resume by monitoring App Review and reviewer communication; after approval, obtain explicit
-authorization before manually releasing the update. The physical TestFlight G4 matrix below remains
-unrecorded and must not be retroactively claimed as passed.
+On 2026-07-30, Apple rejected that package under Guideline 2.1(b) after the reviewer encountered
+`unlock unavailable`. The Paid Apps Agreement was not in effect; after the Account Holder completed
+the required setup, App Store Connect showed the agreement, payout account, and U.S. tax form as
+Active. Apple later directed the developer to review the IAP configuration, complete missing
+information, and test in sandbox. On 2026-09-15, build `1.0.3 (81)` and the IAP were resubmitted
+together; App Store Connect showed both as `Waiting for Review`. Resume by monitoring the current
+review outcome; after approval, obtain explicit authorization before manually releasing the update.
+The physical TestFlight G4 matrix below remains unrecorded and must not be retroactively claimed as
+passed.
+
+Build 81 was archived from the retained detached worktree at `build/release-worktree-81`, based on
+`77fbc4651b6649e0897c1688510e82316d82a5c2`. It included product-load diagnostics and an explicit
+StoreKit framework declaration. Archive inspection confirms build 79 already linked StoreKit, and
+the source change did not alter product loading or purchase behavior, so it is not recorded as the
+behavioral resolution. Both September source changes are committed on `main` at `116916c`
+and preserved in the retained release worktree. The release worktree and archive remain the evidence for
+the exact uploaded binary; the framework declaration alone is not proof of a purchase fix.
 
 P3 implementation state (2026-07-19): release-only builds no longer compile UI-test launch arguments or deterministic fixture seeding, and `Five67.storekit` is excluded from the production app bundle while remaining attached to the Xcode StoreKit scheme. Forced UI-test access no longer starts live StoreKit observation, preventing Apple account UI from contaminating deterministic accessibility evidence. The global Add action now uses one durable router event: it selects Feed before emitting a fresh request token, eliminating the intermittent lost-dialog race while keeping every Add entry point on the same implementation path.
 
@@ -769,7 +787,7 @@ Initial `git status --short` (2026-07-16, before implementation edits):
 ?? docs/design-foundation/
 ?? docs/design-migration.md
 ?? docs/design-system.md
-?? specs/0006-release-closure.plan.md
+?? specs/pending/0006-release-closure.plan.md
 ```
 
 Approval record:
@@ -782,5 +800,5 @@ Approval record:
 
 Open questions:
 
-1. What is Apple's App Review outcome, and is reviewer follow-up required?
+1. Will Apple approve the resubmitted `1.0.3 (81)` app/IAP package now waiting for review?
 2. After approval, when should Adrian authorize the manual release?

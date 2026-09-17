@@ -1,6 +1,7 @@
 # 0001 — Video Feed Redesign: Top Chrome, Bottom Nav, Style Picker Pane
 
-**Status:** Drafted, not implemented
+**Status:** Done — implemented in the 2026-05/06 feed and Style-model work,
+then evolved further through the native-tab and Warm Stage redesigns.
 **Branch (intended):** `feat/immersive-video-feed` (current) or successor
 **Author:** Adrian
 **Drafted:** 2026-05-26

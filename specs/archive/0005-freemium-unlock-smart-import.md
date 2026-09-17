@@ -2,9 +2,18 @@
 
 Generated 2026-07-07 via InterviewMe. Branch: `main`. Repo: `567-ios`.
 
-**Status: DRAFT — locked 2026-07-07; Codex + Fable adversarial reviews absorbed 2026-07-08. Freemium held at $6.99; free cap set to **10 videos / 1 style**; formal cohort-*test* framing dropped (ships as a product, not a measured experiment). Ready to build.**
+**Status: ARCHIVED — partially implemented, then superseded.** The StoreKit
+unlock and first onboarding implementation shipped through later plans, while
+the 10-video cap and onboarding were replaced by
+`specs/done/0007-onboarding-core-ui-redesign.plan.md`. Smart location import and
+iCloud cleanup are not active implementation work.
 
-This spec **supersedes `specs/0002-revenue-focus-habit-payment-test.md`** as the active product track. It keeps 0002's core thesis (fix import friction → drive a repeat-use habit) but is a **larger, monetized build**: a real in-app freemium unlock, a smarter location-based import trigger, and the iCloud cleanup flow that 0002 explicitly deferred. Read 0002 §0 for full product/persona context; it is not repeated here.
+This spec historically **superseded
+`specs/archive/0002-revenue-focus-habit-payment-test.md`**. It kept 0002's core
+thesis (fix import friction → drive a repeat-use habit) but proposed a **larger,
+monetized build**: a real in-app freemium unlock, a smarter location-based
+import trigger, and the iCloud cleanup flow that 0002 explicitly deferred. Read
+0002 §0 for full product/persona context; it is not repeated here.
 
 > **Handoff note:** self-contained. A second agent should be able to build from this top-to-bottom. The one thing needing Adrian's explicit sign-off before code is **§2 — the reversals from 0002** (payment is back; the test is no longer a clean single-variable retention read).
 

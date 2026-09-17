@@ -1,5 +1,7 @@
 # 567 Onboarding and Core UI Redesign
 
+**Status:** Done — all six phases implemented and verified on 2026-07-22.
+
 > **Decision update — 2026-07-22:** The bundled demo-video concept was removed
 > before release. All demo-specific requirements and implementation notes below
 > are retained only as historical execution context and are superseded. The live

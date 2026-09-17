@@ -8,15 +8,17 @@ product brain so the brain stays product-level (Tier-2) and iOS detail lives wit
   `../brain` (i.e. `../brain/synthesized/…`, `../brain/sources/…`).
 - **Tier-1 company/LLC** material is in the Obsidian vault, not in any repo.
 
-## Active work
+## Specs and active work
 
-Numbered specs and implementation plans live in `../specs/`, not here. A plan
-carries its own Progress table and Handoff section — read those before starting a
-session, and update them before ending one.
+Numbered specs and implementation plans are indexed in
+`../specs/README.md`. Their tree communicates state:
 
-- `../specs/0007-onboarding-core-ui-redesign.plan.md` — **active.** Onboarding +
-  core-UI redesign; supersedes the 0005 onboarding flow and its 10-video cap
-  (now 3 personal videos). P1–P3 done, P4–P6 remain.
+- `../specs/pending/` — actionable or proposed work that is not complete.
+- `../specs/done/` — implemented and completed plans.
+- `../specs/archive/` — superseded/closed plans retained for history.
+
+Read the index and a plan's own Progress/Handoff sections before starting a
+session, and update both the plan status and its folder when the state changes.
 
 Docs here:
 - `design-foundation-brief.md` — original design foundation sprint contract

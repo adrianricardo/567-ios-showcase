@@ -6,7 +6,10 @@ Newest decisions first. These are approved iOS experience decisions; product-lev
 
 **Decision:** Remove the bundled demo-video concept completely. Onboarding asks the user to choose one of their own class videos through Apple's private `PhotosPicker`; there is no bundled video, demo escape hatch, demo-specific data marker, or special cap/export treatment. The payoff preview remains a lightweight native composition with no media asset.
 
-**Supersedes:** Every demo-specific clause in the 2026-07-21 decision and `specs/0007-onboarding-core-ui-redesign.plan.md`. The rest of the approved 7-beat onboarding, 3-video free cap, one free style, and Feed completion route remain unchanged.
+**Supersedes:** Every demo-specific clause in the 2026-07-21 decision and
+`specs/done/0007-onboarding-core-ui-redesign.plan.md`. The rest of the approved
+7-beat onboarding, 3-video free cap, one free style, and Feed completion route
+remain unchanged.
 
 **Rationale:** The real first video is the activation event. Maintaining a parallel demo path added binary weight, schema state, review instructions, and policy exceptions without improving the core practice loop.
 
@@ -14,11 +17,16 @@ Newest decisions first. These are approved iOS experience decisions; product-lev
 
 **Decision:** The free tier keeps **3 personal videos** and one personal-content style. Onboarding becomes the approved 7-beat sequence — hook, motivation, tailored payoff, seed video, guided editor, result reveal, paywall — and ends by routing to the Feed focused on the user's own first move. Video selection uses Apple's private `PhotosPicker` only; the app no longer requests Photo Library authorization and ships without `NSPhotoLibraryUsageDescription`. The bundled-demo portion of this decision was superseded on 2026-07-22.
 
-**Supersedes:** `specs/0005-freemium-unlock-smart-import.md`'s **10-video** cap and its 12-beat onboarding blueprint (`docs/onboarding-0005.md`), and the "up to 10 videos" product assumption recorded in `specs/0006-release-closure.plan.md`. Those documents remain accurate records of what shipped as v1.0 — do not read them as current behavior.
+**Supersedes:** `specs/archive/0005-freemium-unlock-smart-import.md`'s
+**10-video** cap and its 12-beat onboarding blueprint
+(`docs/onboarding-0005.md`), and the "up to 10 videos" product assumption
+recorded in `specs/pending/0006-release-closure.plan.md`. Those documents remain
+accurate records of what shipped as v1.0 — do not read them as current behavior.
 
 **Rationale:** 10 videos put the cap-hit roughly a month out, long after the moment the user has felt the product work. Three lands the decision while the first named move is still the thing they are looking at.
 
-**Evidence:** `specs/0007-onboarding-core-ui-redesign.plan.md` (P1–P6), and Adrian's approval of the redesign sequence.
+**Evidence:** `specs/done/0007-onboarding-core-ui-redesign.plan.md` (P1–P6), and
+Adrian's approval of the redesign sequence.
 
 ## 2026-07-21 — Neutral Quiet Stage foreground, and boundaries only where they mean something
 
@@ -28,7 +36,10 @@ Newest decisions first. These are approved iOS experience decisions; product-lev
 
 **Amends:** the Warm Stage foundation (2026-07-14) — its structure, single-cue rule, and accent policy are unchanged; only the warmth of the neutrals and the routine strokes are withdrawn.
 
-**Evidence:** `specs/0007-onboarding-core-ui-redesign.plan.md` P5, the `quiet_stage_neutrals_carry_no_color_cast` and contrast tests, and the P6 visual audit. The Increase Contrast branch is verified by unit test but **not yet on a device** — see `open-questions-ios.md`.
+**Evidence:** `specs/done/0007-onboarding-core-ui-redesign.plan.md` P5, the
+`quiet_stage_neutrals_carry_no_color_cast` and contrast tests, and the P6 visual
+audit. The Increase Contrast branch is verified by unit test but **not yet on a
+device** — see `open-questions-ios.md`.
 
 ## 2026-07-14 — Use Family Values as the primary experience-craft framework
 
