@@ -27,6 +27,11 @@ targets:
     resources:
       - path: Five67/Resources/Assets.xcassets
       - path: Five67/Resources/PrivacyInfo.xcprivacy
+    dependencies:
+      # Xcode represents the In-App Purchase capability by explicitly linking
+      # StoreKit. Keep this in the XcodeGen source of truth so regeneration
+      # does not silently remove the capability before an archive.
+      - sdk: StoreKit.framework
     info:
       path: Five67/Resources/Info.plist
       properties:

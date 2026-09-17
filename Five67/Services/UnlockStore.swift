@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import OSLog
 import StoreKit
 
 enum UnlockProduct {
@@ -8,6 +9,11 @@ enum UnlockProduct {
 
 @MainActor
 @Observable final class UnlockStore {
+    @ObservationIgnored private static let logger = Logger(
+        subsystem: "com.nopal.five67",
+        category: "StoreKit"
+    )
+
     var product: Product?
     var isLoadingProduct = false
     var isPurchasing = false
@@ -143,12 +149,23 @@ enum UnlockProduct {
         defer { isLoadingProduct = false }
 
         do {
-            product = try await Product.products(for: [UnlockProduct.id]).first
-            if product == nil {
+            let products = try await Product.products(for: [UnlockProduct.id])
+            product = products.first
+            if let product {
+                Self.logger.notice(
+                    "Loaded unlock product \(product.id, privacy: .public)."
+                )
+            } else {
+                Self.logger.error(
+                    "StoreKit returned no product for \(UnlockProduct.id, privacy: .public)."
+                )
                 productLoadMessage = "Unlock is unavailable right now. You can keep using 567 free."
             }
         } catch {
             product = nil
+            Self.logger.error(
+                "Product request failed: \(String(describing: error), privacy: .public)"
+            )
             productLoadMessage = "Unlock is unavailable right now. You can keep using 567 free."
         }
     }
