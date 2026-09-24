@@ -11,7 +11,7 @@
 # Usage: ./scripts/reset-coach.sh
 set -euo pipefail
 
-APP_ID=com.nopal.five67
+APP_ID=com.nopal.five67.dev
 
 CONTAINER="$(xcrun simctl get_app_container booted "$APP_ID" data 2>/dev/null || true)"
 if [[ -z "$CONTAINER" ]]; then

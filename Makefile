@@ -2,7 +2,7 @@
 # Generated from project.yml via XcodeGen; uses xcbeautify when available.
 
 SCHEME ?= Five67
-BUNDLE_ID ?= com.nopal.five67
+BUNDLE_ID ?= com.nopal.five67.dev
 BUILD_DESTINATION ?= generic/platform=iOS Simulator
 TEST_DESTINATION ?= platform=iOS Simulator,name=iPhone 17 Pro
 DERIVED_DATA ?= build/DerivedData

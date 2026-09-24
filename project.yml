@@ -36,7 +36,7 @@ targets:
       path: Five67/Resources/Info.plist
       properties:
         CFBundleName: "567"
-        CFBundleDisplayName: "567"
+        CFBundleDisplayName: "$(APP_DISPLAY_NAME)"
         CFBundleShortVersionString: "1.0.3"
         UILaunchScreen:
           UIColorName: ""
@@ -57,6 +57,13 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_IDENTITY: "Apple Development"
+        APP_DISPLAY_NAME: "567"
+      # Debug builds get their own bundle ID + name so a local dev build installs
+      # beside the App Store / TestFlight build instead of replacing it.
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: com.nopal.five67.dev
+          APP_DISPLAY_NAME: "567 Dev"
     postBuildScripts:
       - name: Set CFBundleVersion from git commit count
         script: |
