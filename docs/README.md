@@ -29,9 +29,7 @@ Docs here:
 - `feed-first-ia.md` — feed-first information architecture & journey
 - `library-pane-and-style-mode.md` — library pane + global style mode spec
 - `data-durability.md` — SwiftData durability / backup / migration posture
-- `launch-punch-list.md` — TestFlight → App Store launch punch list
 - `agent-skill-imports.md` — iOS agent-skill imports
-- `open-questions-ios.md` — iOS-specific open questions (split from the shared `open-questions.md`)
 - `agent-friendly-ios-workflow.md` — agent build/verify workflow
 
 Cross-references of the form `feed-first-ia.md` point to siblings here; `../brain/synthesized/…`

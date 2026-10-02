@@ -16,8 +16,6 @@ spec's own status line and all live repository references in the same change.
 
 | Spec | State | Next interpretation |
 |---|---|---|
-| `pending/0003-ugc-creator-9.99-sales-test.md` | Approved experiment, not executed | Reconcile the old $9.99 hard-paywall assumptions with the shipped freemium product before implementation. |
-| `pending/0004-class-recap-sharing.md` | Draft, not started | Requires cross-repo contract work and a fresh approval before implementation. |
 | `pending/0006-release-closure.plan.md` | Waiting for Review as of 2026-09-15 | Build 81 and the lifetime IAP were resubmitted together; check the current App Review outcome and keep manual release gated. |
 | `pending/0008-segment-splitting-tutorial.plan.md` | P1 preserved on a feature branch; not merge-ready | Continue P2–P5 on `codex/segment-splitting-tutorial`; `main` was repaired and verified at `8f08b35`. |
 | `pending/0009-onboarding-fixed-next-button.md` | Todo, not started | Pin the onboarding Next button to a fixed position so only the content updates between steps. |
@@ -33,7 +31,6 @@ spec's own status line and all live repository references in the same change.
 
 | Spec | Why archived |
 |---|---|
-| `archive/0002-revenue-focus-habit-payment-test.md` | Superseded by 0005; retained for product/persona context and historical test reasoning. |
 | `archive/0005-freemium-unlock-smart-import.md` | Partially implemented, then superseded by 0006/0007; smart import and iCloud cleanup are not active work. |
 
 ## Classification rules
